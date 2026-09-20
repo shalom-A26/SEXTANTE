@@ -9,8 +9,10 @@ Concentra:
 
 from __future__ import annotations
 
+import shutil
 import time
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -112,3 +114,17 @@ def resumen_fuente(portal: str, df: pd.DataFrame) -> None:
         f"[{portal}] {len(df)} filas | descripción: {con_desc} | "
         f"salario: {con_sal} | publicación: {fecha_min} → {fecha_max}"
     )
+
+
+def guardar_snapshot(ruta_origen: Path, prefijo: str = "vacantes", subdir: str = "") -> Path:
+    """Copia un store de data/raw/ a data/snapshots/ con marca de tiempo.
+
+    Devuelve la ruta de la copia. Útil para la captura periódica: cada corrida
+    deja un corte puntual ('instante de captura') de los datos crudos/canónicos.
+    """
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    destino = (RUTA_DATOS / "snapshots" / subdir) if subdir else RUTA_DATOS / "snapshots"
+    destino.mkdir(parents=True, exist_ok=True)
+    copia = destino / f"{prefijo}_{ts}{ruta_origen.suffix}"
+    shutil.copy2(ruta_origen, copia)
+    return copia

@@ -17,6 +17,13 @@ uv pip install -r requirements.txt
 .venv/bin/python -m src.extraccion.corpus --fuentes spe
 .venv/bin/python -m src.extraccion.corpus --fuentes spe --spe-csv vacantes_spe_latest.csv   # reusa CSV descargado
 
+# Emisión del dataset unificado (DuckDB local + directorio Hugging Face)
+.venv/bin/python -m src.extraccion.emitir_dataset
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo USUARIO/vacantes-colombia
+
+# Captura periódica cada 12 h
+./scripts/capturar_12h.sh   # cron: 0 */12 * * * (ver comentario dentro del script)
+
 # Validación del corpus (EDA)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
 ```
@@ -60,11 +67,17 @@ No hay suite de tests ni linter configurada aún.
 - `src/extraccion/esquema.py` — contrato de 17 columnas.
 - `src/extraccion/base.py` — sesión HTTP ética (User-Agent, pausas, reintentos),
   estructura de `data/`, guardado incremental con dedupe.
-- `src/extraccion/corpus.py` — orquestador CLI (`python -m src.extraccion.corpus`).
+- `src/extraccion/corpus.py` — orquestador CLI (`python -m src.extraccion.corpus`);
+  flag `--snapshot` para cortes con marca de tiempo en `data/snapshots/`.
+- `src/extraccion/emitir_dataset.py` — consolida corpus grande + curado y emite
+  a DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y a un
+  directorio de dataset Hugging Face (`data/emitido/vacantes-colombia/`).
+  `--hf-upload` publica un dataset privado (requiere `HF_TOKEN`).
 - `src/extraccion/portales/spe.py` — export oficial total del SPE (job asíncrono `/backbue/v1`)
   → esquema canónico → parquet.
 - `src/extraccion/portales/elempleo.py` — listado HTML + detalle JSON-LD `JobPosting`.
 - `src/extraccion/portales/linkedin_jobspy.py` — JobSpy (`python-jobspy`) → esquema canónico.
+- `scripts/capturar_12h.sh` — captura SPE + curado + emisión, con `--snapshot`.
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
 
 ## Estado y pendientes
@@ -72,8 +85,9 @@ No hay suite de tests ni linter configurada aún.
 - ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas,
   2021–2026, cobertura 100% en descripción/nivel educativo/departamento/contrato/salario/experiencia).
 - ✅ Corpus curado ~224 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
-- Pendientes: captura periódica cada 12 h (modo snapshot + cron), publicar el corpus grande
-  en Hugging Face (dataset privado parquet) + DuckDB local, y los módulos `procesamiento/`,
-  `analisis/`, `grafos/`.
+- ✅ Captura periódica: `scripts/capturar_12h.sh` (cron `0 */12 * * *` pendiente de activar).
+- ✅ Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
+- Pendientes: subir el dataset privado a Hugging Face (con `HF_TOKEN`), activar el cron,
+  y los módulos `procesamiento/`, `analisis/`, `grafos/`.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.

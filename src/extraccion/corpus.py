@@ -77,6 +77,11 @@ def main() -> None:
         help="Nombre del CSV del SPE ya descargado en data/raw/spe/ "
         "(evita re-descargar el export total)",
     )
+    parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        help="Copiar los stores de data/raw/ a data/snapshots/ con marca de tiempo",
+    )
     args = parser.parse_args()
 
     fuentes = ["linkedin", "elempleo", "spe"] if args.todo else args.fuentes
@@ -98,9 +103,15 @@ def main() -> None:
             if fuente == "spe":
                 total = spe.guardar_parquet(df)
                 print(f"  -> {total} registros en {spe.RUTA_PARQUET_SPE}")
+                if args.snapshot:
+                    if spe.RUTA_CSV_SPE.exists():
+                        base.guardar_snapshot(spe.RUTA_CSV_SPE, prefijo="vacantes_spe_raw", subdir="spe")
+                    base.guardar_snapshot(spe.RUTA_PARQUET_SPE, prefijo="vacantes_spe", subdir="spe")
             else:
                 agregadas = base.guardar_lotes(df)
                 print(f"  -> {agregadas} nuevas en {base.RUTA_VACANTES}")
+                if args.snapshot:
+                    base.guardar_snapshot(base.RUTA_VACANTES)
 
 
 if __name__ == "__main__":

@@ -11,3 +11,6 @@ __pycache__/
 # Datos
 data/snapshots/
 data/raw/spe/
+data/emitido/
+data/duckdb/
+*.duckdb

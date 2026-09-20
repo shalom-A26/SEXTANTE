@@ -34,9 +34,11 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 - ✅ **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **SPE** (export oficial), **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
 - ✅ **Corpus grande SPE**: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas, 2021–2026, descripción + nivel educativo + departamento + rango salarial + contrato + experiencia; ~107 MB, dedupe por `CODIGO_VACANTE`).
 - ✅ **Corpus curado**: `data/raw/vacantes.csv` (~224 vacantes de El Empleo + LinkedIn, sin duplicados).
+- ✅ **Captura periódica**: `scripts/capturar_12h.sh` + modo `--snapshot` (cortes con marca de tiempo en `data/snapshots/`).
+- ✅ **Almacenamiento**: DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y dataset Hugging Face listo para publicar (`data/emitido/vacantes-colombia/`, shards parquet + dataset card).
 - ✅ **Sonda de viabilidad** de fuentes: `docs/viabilidad_fuentes.md`.
 - ✅ **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica el esquema y la cobertura de campos).
-- ⏳ Siguiente: capturas periódicas (12 h), almacenamiento en Hugging Face + DuckDB, y EDA/NLP (habilidades ESCO) sobre el corpus grande.
+- ⏳ Siguiente: crear el dataset privado en Hugging Face (subir con `HF_TOKEN`), y EDA/NLP (habilidades ESCO) sobre el corpus grande.
 
 ## Metodología
 
@@ -76,18 +78,23 @@ SEXTANTE/
 ├── README.md
 ├── AGENTS.md                # Guía para agentes de IA que trabajen en el repo
 ├── requirements.txt
+├── scripts/
+│   └── capturar_12h.sh      # captura periódica (SPE + curado + emisión; cron 0 */12 * * *)
 ├── data/
 │   ├── raw/                 # vacantes.csv (corpus curado acumulado)
 │   │   └── spe/             # vacantes_spe.parquet (corpus grande canónico) [+ csv export]
 │   ├── procesados/          # datasets limpios/enriquecidos (uso futuro)
-│   └── snapshots/
+│   ├── snapshots/           # cortes con marca de tiempo de cada captura
+│   ├── emitido/             # dataset listo para Hugging Face (parquet + card)
+│   └── duckdb/              # sextante.duckdb (tabla vacantes, local)
 ├── notebooks/
 │   └── eda_validacion.ipynb
 ├── src/
-│   ├── extraccion/          # Pipeline de recolección de vacantes
+│   ├── extraccion/          # Pipeline de recolección y emisión
 │   │   ├── esquema.py       #   contrato de 17 columnas
-│   │   ├── base.py          #   HTTP ético, guardado + dedupe
+│   │   ├── base.py          #   HTTP ético, guardado + dedupe + snapshots
 │   │   ├── corpus.py        #   orquestador (python -m ...)
+│   │   ├── emitir_dataset.py#   DuckDB local + dataset Hugging Face
 │   │   └── portales/
 │   │       ├── spe.py               #   SPE (export oficial CSV → parquet canónico)
 │   │       ├── elempleo.py          #   El Empleo (HTML + JSON-LD)
@@ -110,11 +117,19 @@ uv pip install -r requirements.txt
 # 2a. Corpus grande SPE (export oficial total; ~3 peticiones al portal)
 .venv/bin/python -m src.extraccion.corpus --fuentes spe            # descarga export → parquet
 .venv/bin/python -m src.extraccion.corpus --fuentes spe --spe-csv vacantes_spe_latest.csv  # reusa CSV
+.venv/bin/python -m src.extraccion.corpus --fuentes spe --snapshot  # + snapshot con marca de tiempo
 
 # 2b. Corpus curado y añadirlo a data/raw/vacantes.csv
 .venv/bin/python -m src.extraccion.corpus                 # LinkedIn + El Empleo
 .venv/bin/python -m src.extraccion.corpus --fuentes elempleo
 .venv/bin/python -m src.extraccion.corpus --fuentes linkedin --linkedin-por-busqueda 25
+
+# 2c. Emitir el dataset unificado (DuckDB local + directorio HF)
+.venv/bin/python -m src.extraccion.emitir_dataset
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo TU_USUARIO/vacantes-colombia  # dataset privado en HF
+
+# 2d. Captura periódica cada 12 h (ver scripts/capturar_12h.sh para el cron)
+./scripts/capturar_12h.sh
 
 # 3. Validar el corpus (ejecutar el notebook)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
