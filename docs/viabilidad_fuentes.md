@@ -7,16 +7,36 @@ Herramientas: `python-jobspy` 1.1.13, `requests` 2.x. Volúmenes bajos de prueba
 
 | Fuente | ¿Viable? | Detalle | Prioridad piloto |
 | --- | --- | --- | --- |
-| **LinkedIn** (vía JobSpy) | ✔ Sí | Listado + descripción completa. 10/10 en prueba. | 1 |
-| **El Empleo** (`elempleo.com.co`) | ✔ Sí | Listado HTML público + detalle en JSON-LD `JobPosting`. 20 ofertas únicas por página SEO. | 2 |
+| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Sí | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono oficial). ~285k filas → ~196.8k vacantes únicas; cobertura 100% de campos clave. | 1 |
+| **LinkedIn** (vía JobSpy) | ✔ Sí | Listado + descripción completa. 10/10 en prueba. | 2 |
+| **El Empleo** (`elempleo.com.co`) | ✔ Sí | Listado HTML público + detalle en JSON-LD `JobPosting`. 20 ofertas únicas por página SEO. | 3 |
 | **Computrabajo** | ✘ No | `robots.txt` y página responden 403. Bloqueo agresivo (Cloudflare). No viable sin evasión. | — |
 | **Indeed** (vía JobSpy) | ✘ No | `IndeedException: bad response with status code: 403`. | — |
 | **Glassdoor** (vía JobSpy) | ✘ No | `KeyError: 'GLASSDOOR'`. | — |
-| **SPE – datos abiertos** | ⚠ Pendiente | Portal oficial existe y publica datos abiertos, pero no se localizó en el catálogo Socrata un dataset de vacantes con descripción libre. Explorar en Fase 2. | 3 |
 
 ## Detalle por fuente
 
-### 1. LinkedIn vía JobSpy (`pip install python-jobspy`)
+### 1. SPE – export oficial (`buscadordeempleo.gov.co`) — fuente maestra
+
+El buscador de vacantes del SPE es una SPA en `https://www.buscadordeempleo.gov.co/` que consume una API REST en `https://www.buscadordeempleo.gov.co/backbue/v1`.
+
+Hallazgos de la sonda (2026-09-20):
+
+- La página **no** es scraping: el portal ofrece su propio export masivo. Desde la interfaz web se descarga con el botón *"CSV (Se exportan todas las vacantes)"*; el flujo usa un job asíncrono:
+  1. `POST /vacantes/export/csv/async` → `{jobId}` (202 queued).
+  2. `GET  /vacantes/export/csv/async/{jobId}/status` → `processing` → `completed`.
+  3. `GET  /vacantes/export/csv/async/{jobId}/download` → CSV (~415 MB, UTF-8 con BOM).
+- Resultado (2026-09-20): **284.958 filas** en el CSV → **196.783 vacantes únicas** por `CODIGO_VACANTE` (el export contiene ~88k filas duplicadas del mismo código; se deduplican).
+- **Cobertura 100%** en las 20.000 vacantes muestreadas (y `100%` global): `TITULO_VACANTE`, `DESCRIPCION_VACANTE`, `NIVEL_ESTUDIOS`, `RANGO_SALARIAL`, `DEPARTAMENTO`, `MUNICIPIO`, `TIPO_CONTRATO`, `NOMBRE_PRESTADOR`, `FECHA_PUBLICACION`, `MESES_EXPERIENCIA_CARGO`, `TELETRABAJO`, `SECTOR_ECONOMICO`, `URL_DETALLE_VACANTE`.
+- Histórico: publicaciones desde **2021-06-25** hasta la fecha de captura (actualización continua; `max_date` vía `GET /vacantes/date`).
+- Licencia: datos de vacantes del servicio público de empleo, publicado por el Estado; no contiene datos personales de candidatos. Considerado uso legítimo y ético (fuente oficial = piso de legitimidad).
+- Salario numérico: `RANGO_SALARIAL` es un **bucket** (p. ej. `$1.500.001 - $2.000.000`, `A Convenir`, `Mayor de $15.000.001`). El módulo SPE lo convierte a `salario_min`/`salario_max` (~78% con valor numérico).
+- `URL_DETALLE_VACANTE` apunta a la oferta original (computrabajo ~192k, elempleo ~36k, SPE ~30k, magneto ~21k, etc.) — el SPE agrega vacantes de múltiples portales.
+- Nota ética: se descarga con el mecanismo oficial de exportación (3 peticiones HTTP por captura completa), sin evasión.
+
+Implementación: `src/extraccion/portales/spe.py`, orquestado con `python -m src.extraccion.corpus --fuentes spe`. Almacenamiento: `data/raw/spe/vacantes_spe.parquet` (dedupe por `id_vacante`, no por `url`).
+
+### 2. LinkedIn vía JobSpy (`pip install python-jobspy`)
 
 JobSpy agrega vacantes de varios portales en un solo `DataFrame` normalizado.
 
@@ -28,7 +48,7 @@ JobSpy agrega vacantes de varios portales en un solo `DataFrame` normalizado.
   - LinkedIn busca de forma global: con `location="Colombia"` aparecen ofertas remotas globales ejecutables desde Colombia.
   - Indeed → 403. Glassdoor → KeyError. Se descartan en el motor JobSpy.
 
-### 2. El Empleo (`elempleo.com/co/`)
+### 3. El Empleo (`elempleo.com/co/`)
 
 - `robots.txt` accesible y permisivo (solo bloquea rutas de administración y privadas → `Disallow: */Admin/`, `*/Management/`, etc.).
 - Listado público: `https://www.elempleo.com/co/ofertas-empleo/` y variantes SEO por ciudad o cargo:
@@ -44,17 +64,17 @@ JobSpy agrega vacantes de varios portales en un solo `DataFrame` normalizado.
   - `jobLocation.address` (generalmente solo país `CO`; la ciudad viene en la tarjeta del listado).
 - Web API (`/co/api/joboffers/findbyfilter`) devuelve `401 Authorization has been denied` → **no se usa** (evitar evasión/auth frágil).
 
-### 3. Computrabajo — descartado
+### 4. Computrabajo — descartado
 
-- `co.computrabajo.com/robots.txt` → `403 Forbidden`.
+- Los datos `robots.txt` y página responden 403.
 - Home y listados también bloqueados. El proveedor bloquea clientes que no son navegadores.
 - Para un proyecto con ética de datos como eje transversal, descartado (no se usarán técnicas de evasión).
 
-### 4. SPE – datos abiertos — pendiente de exploración
+### 5. SPE – datos abiertos en datos.gov.co — descartado como vía
 
-- Portal oficial: `serviciodeempleo.gov.co/transparencia-e-informacion/informes-de-interes/publicacion-de-datos-abiertos` y dashboard agregado `dataempleo.serviciodeempleo.gov.co` (no contiene vacantes individuales con descripción).
-- Búsqueda en el catálogo Socrata de `datos.gov.co` (“ofertas de empleo”, “vacantes”) no devolvió un dataset de vacantes con descripción libre. Los datasets OPE encontrados son de la Alcaldía de Medellín (atenciones/vinculados), sin texto de oferta.
-- **Acción Fase 2**: identificar el dataset oficial de vacantes del SPE (o su API) o descartar formalmente.
+- `serviciodeempleo.gov.co/transparencia-e-informacion/.../publicacion-de-datos-abiertos` enlaza al catálogo Socrata de `datos.gov.co` para la entidad "Servicio Publico de Empleo".
+- El catálogo Socrata de datos.gov.co **no** contiene un dataset de vacantes con descripción libre (solo registros de atenciones/vinculados de OPE de Medellín y agregados de desempleo).
+- Conclusión: la vía correcta para el SPE es el **export oficial de `buscadordeempleo.gov.co`** (ver sección 1), no datos.gov.co.
 
 ## Criterios éticos adoptados (eje transversal del curso)
 
@@ -68,4 +88,4 @@ JobSpy agrega vacantes de varios portales en un solo `DataFrame` normalizado.
 
 ## Decisión de piloto
 
-Construir el motor de extracción con **JobSpy → LinkedIn** (rápido, DataFrame normalizado, descripciones completas) y **El Empleo** (HTML + JSON-LD, robots abierto, sin login), con el esquema canónico de 17 columnas definido en `src/extraccion/esquema.py`.
+Construir el motor de extracción con **SPE (export oficial)** como fuente maestra de volumen (corpus grande en parquet), más **JobSpy → LinkedIn** (rápido, DataFrame normalizado, descripciones completas) y **El Empleo** (HTML + JSON-LD, robots abierto, sin login), todos normalizados al esquema canónico de 17 columnas definido en `src/extraccion/esquema.py`.

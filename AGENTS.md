@@ -10,8 +10,12 @@ colombiano (vacantes → habilidades, salarios, perfiles, grafos).
 .venv/bin/python --version        # Python ≥ 3.10 (venv creado con uv)
 uv pip install -r requirements.txt
 
-# Extracción de vacantes (añade a data/raw/vacantes.csv)
+# Extracción de vacantes
+# Corpus curado (El Empleo + LinkedIn) → data/raw/vacantes.csv
 .venv/bin/python -m src.extraccion.corpus --todo
+# Corpus grande SPE (export oficial total) → data/raw/spe/vacantes_spe.parquet
+.venv/bin/python -m src.extraccion.corpus --fuentes spe
+.venv/bin/python -m src.extraccion.corpus --fuentes spe --spe-csv vacantes_spe_latest.csv   # reusa CSV descargado
 
 # Validación del corpus (EDA)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
@@ -33,15 +37,22 @@ No hay suite de tests ni linter configurada aún.
      registrarla en `docs/viabilidad_fuentes.md`.
 3. **Fechas**: `fecha_captura` siempre se estampa con `%Y-%m-%d %H:%M:%S`;
    `fecha_publicacion` queda tal cual la da la fuente (formato variable).
-4. **Guardado**: usar `src.extraccion.base.guardar_lotes()` (append + dedupe por `url`).
-5. Duplicados entre fuentes: distinguir con `portal`; el dedupe por defecto es `url`.
+4. **Guardado**:
+   - Corpus curado (elempleo/linkedin): `src.extraccion.base.guardar_lotes()`
+     (append + dedupe por `url`) en `data/raw/vacantes.csv`.
+   - SPE: `src.extraccion.portales.spe.guardar_parquet()` → `data/raw/spe/vacantes_spe.parquet`
+     con dedupe por `id_vacante` (`CODIGO_VACANTE`: varias vacantes distintas
+     del SPE pueden compartir `url` del prestador).
+5. Duplicados entre fuentes: distinguir con `portal`; el dedupe por defecto es `url`
+   (salvo SPE, que usa `CODIGO_VACANTE`).
 
 ## Dominio / glosario
 
 - **Vacante/oferta**: publicación de empleo con descripción en texto libre.
 - **Esquema canónico**: las 17 columnas documentadas en el README.
-- **Portal/fuente**: sitio del que se extrae (p. ej. `elempleo`, `linkedin`).
-- **Corpus**: conjunto acumulado en `data/raw/vacantes.csv`.
+- **Portal/fuente**: sitio del que se extrae (p. ej. `elempleo`, `linkedin`, `spe`).
+- **Corpus curado**: conjunto acumulado en `data/raw/vacantes.csv`.
+- **Corpus grande**: `data/raw/spe/vacantes_spe.parquet` (export oficial SPE, ~196.8k vacantes únicas).
 - Habilidades → taxonomía ESCO (referencia futura, no aplicada aún).
 
 ## Arquitectura actual
@@ -50,15 +61,19 @@ No hay suite de tests ni linter configurada aún.
 - `src/extraccion/base.py` — sesión HTTP ética (User-Agent, pausas, reintentos),
   estructura de `data/`, guardado incremental con dedupe.
 - `src/extraccion/corpus.py` — orquestador CLI (`python -m src.extraccion.corpus`).
+- `src/extraccion/portales/spe.py` — export oficial total del SPE (job asíncrono `/backbue/v1`)
+  → esquema canónico → parquet.
 - `src/extraccion/portales/elempleo.py` — listado HTML + detalle JSON-LD `JobPosting`.
 - `src/extraccion/portales/linkedin_jobspy.py` — JobSpy (`python-jobspy`) → esquema canónico.
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
 
 ## Estado y pendientes
 
-- ✅ Corpus inicial ~218 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
-- Pendientes: campos `departamento`, `nivel_educativo`, `experiencia_texto`
-  (etapa NLP), salario numérico en LinkedIn, fuente SPE (datos abiertos),
-  y los módulos `procesamiento/`, `analisis/`, `grafos/`.
+- ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas,
+  2021–2026, cobertura 100% en descripción/nivel educativo/departamento/contrato/salario/experiencia).
+- ✅ Corpus curado ~224 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
+- Pendientes: captura periódica cada 12 h (modo snapshot + cron), publicar el corpus grande
+  en Hugging Face (dataset privado parquet) + DuckDB local, y los módulos `procesamiento/`,
+  `analisis/`, `grafos/`.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.

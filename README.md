@@ -31,11 +31,12 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 
 ## Estado actual
 
-- ✅ **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
-- ✅ **Corpus inicial**: `data/raw/vacantes.csv` (~218 vacantes, sin duplicados).
+- ✅ **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **SPE** (export oficial), **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
+- ✅ **Corpus grande SPE**: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas, 2021–2026, descripción + nivel educativo + departamento + rango salarial + contrato + experiencia; ~107 MB, dedupe por `CODIGO_VACANTE`).
+- ✅ **Corpus curado**: `data/raw/vacantes.csv` (~224 vacantes de El Empleo + LinkedIn, sin duplicados).
 - ✅ **Sonda de viabilidad** de fuentes: `docs/viabilidad_fuentes.md`.
 - ✅ **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica el esquema y la cobertura de campos).
-- ⏳ Siguiente: EDA profundo, extracción de habilidades (ESCO) y NLP sobre descripciones.
+- ⏳ Siguiente: capturas periódicas (12 h), almacenamiento en Hugging Face + DuckDB, y EDA/NLP (habilidades ESCO) sobre el corpus grande.
 
 ## Metodología
 
@@ -53,9 +54,9 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 
 | Fuente | Estado | Detalle |
 | --- | --- | --- |
+| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Activa | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono). ~285k filas → ~196.8k únicas. Cobertura 100% en descripción, departamento, nivel educativo, contrato, salario, experiencia. |
 | **El Empleo** (`elempleo.com/co/`) | ✔ Activa | HTML público (robots.txt permisivo) + detalle JSON-LD `JobPosting`. |
 | **LinkedIn** (vía JobSpy) | ✔ Activa | `python-jobspy`; descripciones completas sin autenticación. |
-| **SPE – datos abiertos** | ⚠ Pendiente | Explorar dataset oficial de vacantes del Servicio Público de Empleo. |
 | Computrabajo / Indeed / Glassdoor | ✘ No viable | Bloqueos 403; se descartan sin evasión (ética). |
 
 La viabilidad completa y los motivos están en [`docs/viabilidad_fuentes.md`](docs/viabilidad_fuentes.md).
@@ -66,7 +67,7 @@ Definido en `src/extraccion/esquema.py`; es el **único contrato de salida** de 
 
 `id_vacante, portal, url, titulo, empresa, ciudad, departamento, fecha_publicacion, descripcion, salario_texto, salario_min, salario_max, tipo_contrato, modalidad, nivel_educativo, experiencia_texto, fecha_captura`
 
-Campos con cobertura baja hoy (a completar en la etapa de NLP): `departamento`, `nivel_educativo`, `experiencia_texto`. El salario numérico en LinkedIn aún no está disponible.
+La fuente SPE llena de forma nativa los campos que antes estaban al 0% (`departamento`, `nivel_educativo`, `experiencia_texto`) y numéricos de salario (~78%).
 
 ## Estructura del proyecto
 
@@ -76,7 +77,8 @@ SEXTANTE/
 ├── AGENTS.md                # Guía para agentes de IA que trabajen en el repo
 ├── requirements.txt
 ├── data/
-│   ├── raw/                 # vacantes.csv (corpus crudo acumulado)
+│   ├── raw/                 # vacantes.csv (corpus curado acumulado)
+│   │   └── spe/             # vacantes_spe.parquet (corpus grande canónico) [+ csv export]
 │   ├── procesados/          # datasets limpios/enriquecidos (uso futuro)
 │   └── snapshots/
 ├── notebooks/
@@ -87,6 +89,7 @@ SEXTANTE/
 │   │   ├── base.py          #   HTTP ético, guardado + dedupe
 │   │   ├── corpus.py        #   orquestador (python -m ...)
 │   │   └── portales/
+│   │       ├── spe.py               #   SPE (export oficial CSV → parquet canónico)
 │   │       ├── elempleo.py          #   El Empleo (HTML + JSON-LD)
 │   │       └── linkedin_jobspy.py   #   LinkedIn vía JobSpy
 │   ├── procesamiento/       # Limpieza, normalización, NLP, embeddings (uso futuro)
@@ -104,7 +107,11 @@ SEXTANTE/
 uv venv                      # o: python -m venv .venv
 uv pip install -r requirements.txt
 
-# 2. Recolectar vacantes y añadirlas a data/raw/vacantes.csv
+# 2a. Corpus grande SPE (export oficial total; ~3 peticiones al portal)
+.venv/bin/python -m src.extraccion.corpus --fuentes spe            # descarga export → parquet
+.venv/bin/python -m src.extraccion.corpus --fuentes spe --spe-csv vacantes_spe_latest.csv  # reusa CSV
+
+# 2b. Corpus curado y añadirlo a data/raw/vacantes.csv
 .venv/bin/python -m src.extraccion.corpus                 # LinkedIn + El Empleo
 .venv/bin/python -m src.extraccion.corpus --fuentes elempleo
 .venv/bin/python -m src.extraccion.corpus --fuentes linkedin --linkedin-por-busqueda 25
@@ -113,7 +120,7 @@ uv pip install -r requirements.txt
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
 ```
 
-Cada corrida **añade** filas nuevas (dedupe por `url`) y estampa `fecha_captura`.
+Cada corrida **añade** filas nuevas y estampa `fecha_captura`: `vacantes.csv` deduplica por `url`; el parquet del SPE deduplica por `id_vacante` (`CODIGO_VACANTE`).
 
 ## Ética de datos (eje transversal)
 

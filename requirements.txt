@@ -1,4 +1,6 @@
 pandas
+pyarrow
+duckdb
 numpy
 scikit-learn
 matplotlib
