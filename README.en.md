@@ -242,8 +242,10 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --
 
 # 2d. Restore the accumulated corpus from Hugging Face (persistent memory)
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
+# 2e. Seed HF with the local stores (first run only, or after recreating the dataset):
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/vacantes-colombia
 
-# 2e. Manual local capture (development); automatic capture runs in GitHub Actions
+# 2f. Manual local capture (development); automatic capture runs in GitHub Actions
 ./scripts/capturar_6h.sh
 
 # 3. Validate the corpus (run the notebook)

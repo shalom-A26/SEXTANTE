@@ -61,7 +61,7 @@ jobs:
 
           spe = raiz / "data/raw/spe/vacantes_spe.parquet"
           curado = raiz / "data/raw/vacantes.csv"
-          duckdb = raiz / "data/duckdb/sextante.duckdb"
+          duckdb_path = raiz / "data/duckdb/sextante.duckdb"
 
           if spe.exists():
               n = len(pd.read_parquet(spe))
@@ -75,10 +75,10 @@ jobs:
           else:
               lines.append("- Corpus curado: vacio")
 
-          if duckdb.exists():
+          if duckdb_path.exists():
               import duckdb
 
-              n = duckdb.connect(str(duckdb)).execute("SELECT count(*) FROM vacantes").fetchone()[0]
+              n = duckdb.connect(str(duckdb_path)).execute("SELECT count(*) FROM vacantes").fetchone()[0]
               lines.append(f"- Dataset unificado (DuckDB): {n:,} filas")
 
           print("\n".join(lines))

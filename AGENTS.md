@@ -23,6 +23,8 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --
 
 # Restaurar el corpus acumulado desde Hugging Face (memoria persistente)
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
+# Sembrar HF con los stores locales (primera corrida / tras recrear el dataset)
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/vacantes-colombia
 
 # Captura manual local (desarrollo; la automática corre en GitHub Actions)
 ./scripts/capturar_6h.sh   # uses local stores + snapshots; see script header
@@ -82,8 +84,9 @@ No hay suite de tests ni linter configurada aún.
   estructura de `data/`, guardado incremental con dedupe.
 - `src/extraccion/corpus.py` — orquestador CLI (`python -m src.extraccion.corpus`);
   flag `--snapshot` para cortes con marca de tiempo en `data/snapshots/`.
-- `src/extraccion/sync_hf.py` — restaura el corpus acumulado desde HF (`--pull`)
-  hacia `data/raw/` y `data/raw/spe/` antes de cada corrida.
+- `src/extraccion/sync_hf.py` — sincroniza con HF: `--pull` restaura el corpus
+  acumulado (`store/`) hacia `data/raw/` antes de capturar; `--push` siembra/actualiza
+  los stores locales en HF (primera corrida o tras recrear el dataset).
 - `src/extraccion/emitir_dataset.py` — consolida corpus grande + curado y emite
   a DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y a un
   directorio de dataset Hugging Face (`data/emitido/vacantes-colombia/`).
