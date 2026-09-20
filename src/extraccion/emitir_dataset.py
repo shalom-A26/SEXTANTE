@@ -104,6 +104,9 @@ def emitir_hf(unido: pd.DataFrame, repo_id: str) -> Path:
 
 def _dataset_card(unido: pd.DataFrame, n_shards: int) -> str:
     count = len(unido)
+    por_almacen = unido.get("almacen", pd.Series(dtype=str)).value_counts()
+    n_spe = int(por_almacen.get("spe", 0))
+    n_curado = int(por_almacen.get("curado", 0))
     fecha_captura = unido["fecha_captura"].dropna().max()
     cub = (unido.notna().mean() * 100).round(1).sort_values()
     cub_txt = "\n".join(f"  - {k}: {v}%" for k, v in cub.items() if v < 100)
@@ -116,6 +119,7 @@ Dataset académico de vacantes laborales colombianas (proyecto SEXTANTE,
 Universidad Tecnológica de Bolívar).
 
 - **Registros**: {count:,} (esquema canónico de 17 columnas).
+- **Composición**: {n_spe:,} SPE + {n_curado:,} curado (El Empleo + LinkedIn).
 - **Última captura**: {fecha_captura}.
 - **Shards**: {n_shards} parquet bajo `data/`.
 
@@ -123,13 +127,14 @@ Universidad Tecnológica de Bolívar).
 
 1. **SPE (fuente maestra)** — export oficial del buscador de vacantes del
    Servicio Público de Empleo (`buscadordeempleo.gov.co`, API `/backbue/v1`,
-   job asíncrono de export masivo). ~196.8k vacantes únicas por
-   `CODIGO_VACANTE`; históricas 2021→hoy, cobertura ~100% en descripción,
-   nivel educativo, departamento, contrato, salario y experiencia.
-2. **El Empleo y LinkedIn** — corpus curado (~224 vacantes), extraído con
-   scraping ético (robots.txt, throttling, User-Agent identificable).
+   job asíncrono de export masivo). Vacantes únicas por `CODIGO_VACANTE`;
+   históricas 2021→hoy, cobertura ~100% en descripción, nivel educativo,
+   departamento, contrato, salario y experiencia.
+2. **El Empleo y LinkedIn** — corpus curado, extraído con scraping ético
+   (robots.txt, throttling, User-Agent identificable).
 
-Los criterios éticos completos están en `docs/viabilidad_fuentes.md`.
+Los criterios éticos completos están en `docs/viabilidad_fuentes.md`
+(`docs/viabilidad_fuentes.en.md` en inglés).
 
 ## Columnas
 

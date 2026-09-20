@@ -40,8 +40,8 @@ No hay suite de tests ni linter configurada aún.
    - No recopilar datos personales de candidatos.
    - `User-Agent` identificable: `SEXTANTE-UTB-university-research/1.0 (...)`.
    - Throttling en peticiones (pausa mínima definida en `src/extraccion/base.py`).
-   - Al añadir una nueva fuente: primero viabilidad (robots/ToS/estructura) y
-     registrarla en `docs/viabilidad_fuentes.md`.
+- Al añadir una nueva fuente: primero viabilidad (robots/ToS/estructura) y
+      registrarla en `docs/viabilidad_fuentes.md` (+ `docs/viabilidad_fuentes.en.md`).
 3. **Fechas**: `fecha_captura` siempre se estampa con `%Y-%m-%d %H:%M:%S`;
    `fecha_publicacion` queda tal cual la da la fuente (formato variable).
 4. **Guardado**:
@@ -59,7 +59,7 @@ No hay suite de tests ni linter configurada aún.
 - **Esquema canónico**: las 17 columnas documentadas en el README.
 - **Portal/fuente**: sitio del que se extrae (p. ej. `elempleo`, `linkedin`, `spe`).
 - **Corpus curado**: conjunto acumulado en `data/raw/vacantes.csv`.
-- **Corpus grande**: `data/raw/spe/vacantes_spe.parquet` (export oficial SPE, ~196.8k vacantes únicas).
+- **Corpus grande**: `data/raw/spe/vacantes_spe.parquet` (export oficial SPE, ~246.5k vacantes únicas acumuladas).
 - Habilidades → taxonomía ESCO (referencia futura, no aplicada aún).
 
 ## Arquitectura actual
@@ -74,7 +74,7 @@ No hay suite de tests ni linter configurada aún.
   directorio de dataset Hugging Face (`data/emitido/vacantes-colombia/`).
   `--hf-upload` publica un dataset privado (requiere `HF_TOKEN`).
 - `src/extraccion/portales/spe.py` — export oficial total del SPE (job asíncrono `/backbue/v1`)
-  → esquema canónico → parquet.
+  → esquema canónico → parquet. `verify=False` solo como reintento ante TLS intermitente del portal.
 - `src/extraccion/portales/elempleo.py` — listado HTML + detalle JSON-LD `JobPosting`.
 - `src/extraccion/portales/linkedin_jobspy.py` — JobSpy (`python-jobspy`) → esquema canónico.
 - `scripts/capturar_6h.sh` — captura SPE + curado + emisión, con `--snapshot`.
@@ -82,12 +82,21 @@ No hay suite de tests ni linter configurada aún.
 
 ## Estado y pendientes
 
-- ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas,
-  2021–2026, cobertura 100% en descripción/nivel educativo/departamento/contrato/salario/experiencia).
-- ✅ Corpus curado ~224 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
+- ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~246.5k vacantes únicas
+  acumuladas, ~285k filas por export, 2021–2026, cobertura ~100% en descripción/nivel
+  educativo/departamento/contrato/salario/experiencia).
+- ✅ Corpus curado ~231 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
 - ✅ Captura periódica: `scripts/capturar_6h.sh` (cron `0 */6 * * *` activado y validado).
 - ✅ Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
-- Pendientes: subir el dataset privado a Hugging Face (con `HF_TOKEN`), activar el cron,
-  y los módulos `procesamiento/`, `analisis/`, `grafos/`.
+- ✅ Dataset HF privado publicado: `pxtron/vacantes-colombia` (ver HF_TOKEN rotado para re-subidas).
+- Pendientes: los módulos `procesamiento/`, `analisis/`, `grafos/`.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.
+
+## Documentación (bilingüe)
+
+- `README.md` / `README.en.md` — descripción, uso y estado (español ✔ / inglés).
+- `docs/arquitectura.md` / `docs/architecture.en.md` — modelo C4 (contexto, contenedores,
+  componentes, despliegue), flujos, secuencias y modelo de datos; **todos los diagramas en Mermaid**.
+- `docs/viabilidad_fuentes.md` / `docs/viabilidad_fuentes.en.md` — estudio de fuentes (español ✔ / inglés).
+- Regla: al cambiar arquitectura o diagramas, actualizar ambas versiones (mantener sincronía).

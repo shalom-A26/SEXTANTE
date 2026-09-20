@@ -7,7 +7,7 @@ Herramientas: `python-jobspy` 1.1.13, `requests` 2.x. Volúmenes bajos de prueba
 
 | Fuente | ¿Viable? | Detalle | Prioridad piloto |
 | --- | --- | --- | --- |
-| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Sí | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono oficial). ~285k filas → ~196.8k vacantes únicas; cobertura 100% de campos clave. | 1 |
+| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Sí | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono oficial). ~285k filas/captura; store canónico acumulado a 246,5k únicas; cobertura ~100% de campos clave. | 1 |
 | **LinkedIn** (vía JobSpy) | ✔ Sí | Listado + descripción completa. 10/10 en prueba. | 2 |
 | **El Empleo** (`elempleo.com.co`) | ✔ Sí | Listado HTML público + detalle en JSON-LD `JobPosting`. 20 ofertas únicas por página SEO. | 3 |
 | **Computrabajo** | ✘ No | `robots.txt` y página responden 403. Bloqueo agresivo (Cloudflare). No viable sin evasión. | — |
@@ -26,13 +26,13 @@ Hallazgos de la sonda (2026-09-20):
   1. `POST /vacantes/export/csv/async` → `{jobId}` (202 queued).
   2. `GET  /vacantes/export/csv/async/{jobId}/status` → `processing` → `completed`.
   3. `GET  /vacantes/export/csv/async/{jobId}/download` → CSV (~415 MB, UTF-8 con BOM).
-- Resultado (2026-09-20): **284.958 filas** en el CSV → **196.783 vacantes únicas** por `CODIGO_VACANTE` (el export contiene ~88k filas duplicadas del mismo código; se deduplican).
+- Resultado (2026-09-20): la primera sonda arrojó **284.958 filas** en el CSV → **196.783 vacantes únicas** por `CODIGO_VACANTE` (el export contiene filas duplicadas del mismo código; se deduplican). Capturas posteriores incorporaron códigos nuevos: el store canónico acumula **246.551 únicas** (2026-09-20).
 - **Cobertura 100%** en las 20.000 vacantes muestreadas (y `100%` global): `TITULO_VACANTE`, `DESCRIPCION_VACANTE`, `NIVEL_ESTUDIOS`, `RANGO_SALARIAL`, `DEPARTAMENTO`, `MUNICIPIO`, `TIPO_CONTRATO`, `NOMBRE_PRESTADOR`, `FECHA_PUBLICACION`, `MESES_EXPERIENCIA_CARGO`, `TELETRABAJO`, `SECTOR_ECONOMICO`, `URL_DETALLE_VACANTE`.
 - Histórico: publicaciones desde **2021-06-25** hasta la fecha de captura (actualización continua; `max_date` vía `GET /vacantes/date`).
 - Licencia: datos de vacantes del servicio público de empleo, publicado por el Estado; no contiene datos personales de candidatos. Considerado uso legítimo y ético (fuente oficial = piso de legitimidad).
 - Salario numérico: `RANGO_SALARIAL` es un **bucket** (p. ej. `$1.500.001 - $2.000.000`, `A Convenir`, `Mayor de $15.000.001`). El módulo SPE lo convierte a `salario_min`/`salario_max` (~78% con valor numérico).
 - `URL_DETALLE_VACANTE` apunta a la oferta original (computrabajo ~192k, elempleo ~36k, SPE ~30k, magneto ~21k, etc.) — el SPE agrega vacantes de múltiples portales.
-- Nota ética: se descarga con el mecanismo oficial de exportación (3 peticiones HTTP por captura completa), sin evasión.
+- Nota ética: se descarga con el mecanismo oficial de exportación (3 peticiones HTTP por captura completa), sin evasión. El portal presenta un certificado TLS intermitente; `spe.py` reintenta con `verify=False` **solo** ante fallo de validación SSL (sitio estatal público de solo lectura).
 
 Implementación: `src/extraccion/portales/spe.py`, orquestado con `python -m src.extraccion.corpus --fuentes spe`. Almacenamiento: `data/raw/spe/vacantes_spe.parquet` (dedupe por `id_vacante`, no por `url`).
 

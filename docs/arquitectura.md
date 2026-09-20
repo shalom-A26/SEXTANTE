@@ -1,0 +1,338 @@
+# Arquitectura de SEXTANTE
+
+> **🌐 Español** · [English version](architecture.en.md) · [README](../README.md)
+
+Modelo C4 de la plataforma (contexto, contenedores, componentes y despliegue), flujos principales de datos, secuencias de captura y modelo de datos. Todos los diagramas están escritos en **Mermaid** para poder renderizarse en docs, editores y GitHub.
+
+## Índice
+
+1. [Resumen](#resumen)
+2. [Modelo C4](#modelo-c4)
+   - [Nivel 1 · Contexto](#nivel-1--contexto)
+   - [Nivel 2 · Contenedores](#nivel-2--contenedores)
+   - [Nivel 3 · Componentes](#nivel-3--componentes)
+   - [Nivel 4 · Despliegue](#nivel-4--despliegue)
+3. [Flujo de datos y captura periódica](#flujo-de-datos-y-captura-periódica)
+4. [Secuencia: export asíncrono del SPE](#secuencia-export-asíncrono-del-spe)
+5. [Modelo de datos](#modelo-de-datos)
+6. [Decisiones de diseño](#decisiones-de-diseño)
+
+---
+
+## Resumen
+
+SEXTANTE es un pipeline ETL/ELT de vacantes laborales colombianas:
+
+1. **Extrae** de tres fuentes: el export oficial del SPE (masivo, ~285 k filas/captura), El Empleo (HTML + JSON-LD) y LinkedIn (JobSpy).
+2. **Normaliza** todo al **esquema canónico de 17 columnas** (`src/extraccion/esquema.py`, `normalizar()` / `validar()`).
+3. **Guarda** en dos stores: corpus grande canónico en parquet (SPE) y corpus curado en CSV (El Empleo + LinkedIn), con snapshots con marca de tiempo.
+4. **Emite** el dataset unificado a DuckDB local y a un directorio listo para Hugging Face (`emitir_dataset.py`; subida opcional con `--hf-upload`).
+5. La **captura es automática** cada 6 horas mediante cron (`scripts/capturar_6h.sh`).
+
+Estado actual: **246.782 vacantes** en DuckDB (246.551 SPE + 231 curado), dataset privado HF `pxtron/vacantes-colombia`, captura cron `0 */6 * * *` activa.
+
+---
+
+## Modelo C4
+
+### Nivel 1 · Contexto
+
+Quién usa el sistema y con qué sistemas externos se relaciona.
+
+```mermaid
+flowchart LR
+    u["🧑‍🏫 Equipo UTB<br/>Analítica y Minería de Datos"]
+    s{{"SEXTANTE<br/>analítica del mercado laboral<br/>colombiano"}}
+    spe["🌐 SPE · Buscador de Empleo<br/>buscadordeempleo.gov.co<br/>API /backbue/v1"]
+    ee["🌐 El Empleo<br/>elempleo.com"]
+    li["🌐 LinkedIn<br/>vía JobSpy"]
+    hf["🤗 Hugging Face Hub<br/>pxtron/vacantes-colombia (privado)"]
+
+    u -->|configura, ejecuta, consulta| s
+    s -->|"export oficial CSV (3 peticiones/captura)"| spe
+    s -->|"listados HTML + detalle JSON-LD"| ee
+    s -->|"búsquedas por término"| li
+    s -->|"publica dataset privado (HF_TOKEN)"| hf
+    s -.->|"solo información pública de ofertas"| u
+
+    classDef sist fill:#1168bd,color:#fff,stroke:#0b4884;
+    classDef ext fill:#999999,color:#fff,stroke:#6b6b6b;
+    class s sist;
+    class spe,ee,li,hf ext;
+```
+
+- **Equipo UTB**: configura, ejecuta y consulta resultados (CLI + notebook de validación).
+- **SPE**: sistema externo estatal del que se baja el export total (mecanismo oficial, sin scraping).
+- **El Empleo** y **LinkedIn**: portales scrapeados con criterios éticos (throttling, UA identificable, robots.txt).
+- **Hugging Face Hub**: destino de publicación del dataset (privado, académico).
+
+### Nivel 2 · Contenedores
+
+Descomposición del sistema en contenedores ejecutables y de almacenamiento de alto nivel.
+
+```mermaid
+flowchart TB
+    subgraph SEXTANTE["SEXTANTE (GNU/Linux, usuario pxtron)"]
+        direccion["🚀 CLI · python -m src.extraccion.corpus<br/>orquestador de recolección"]
+        cronrun["⏰ cron 0 */6 * * * ·<br/>scripts/capturar_6h.sh"]
+        emit["🚀 CLI · python -m src.extraccion.emitir_dataset<br/>emisión DuckDB + HF"]
+        eda["📓 Jupyter Notebook<br/>eda_validacion.ipynb"]
+
+        subgraph FLUJO["Almacenamiento de datos"]
+            storespe[("🗄 parquet<br/>data/raw/spe/vacantes_spe.parquet")]
+            storecu[("📄 CSV<br/>data/raw/vacantes.csv")]
+            snaps["📁 Snapshots<br/>data/snapshots/"]
+            duckdb[("🐤 DuckDB<br/>sextante.duckdb · tabla vacantes")]
+            hfdir["📦 Dataset HF<br/>data/emitido/vacantes-colombia/"]
+        end
+    end
+
+    spe["🌐 SPE /backbue/v1"]
+    ee["🌐 El Empleo"]
+    li["🌐 LinkedIn (JobSpy)"]
+    hub["🤗 HF Hub"]
+
+    cronrun --> direccion
+    direccion -->|"POST /export/csv/async + POLL + GET download"| spe
+    direccion -->|"GET listados + detalle JSON-LD"| ee
+    direccion -->|"scrape_jobs(...)"| li
+    direccion --> storespe
+    direccion --> storecu
+    direccion --> snaps
+    emit --> storespe
+    emit --> storecu
+    emit --> duckdb
+    emit --> hfdir
+    hfdir -->|"--hf-upload"| hub
+    eda --> duckdb
+    eda --> storespe
+    eda --> storecu
+
+    classDef cont fill:#1168bd,color:#fff,stroke:#0b4884;
+    classDef almacen fill:#1168bd,color:#fff,stroke:#0b4884;
+    classDef ext fill:#999999,color:#fff,stroke:#6b6b6b;
+    class direccion,cronrun,emit,eda cont;
+    class storespe,storecu,snaps,duckdb,hfdir almacen;
+    class spe,ee,li,hub ext;
+```
+
+- **corpus.py**: orquesta las fuentes, aplica `normalizar()`, guarda con dedupe y snapshots.
+- **emitir_dataset.py**: consolida ambos stores y escribe DuckDB + directorio HF.
+- **DuckDB**: base analítica local; tabla `vacantes` con 17 columnas canónicas + `almacen` (`spe`/`curado`).
+- **Jupyter**: EDA de validación del esquema y cobertura.
+
+### Nivel 3 · Componentes
+
+Componentes internos del contenedor de extracción/emisión.
+
+```mermaid
+flowchart LR
+    subgraph SRC["src/extraccion/"]
+        esquema["esquema.py<br/>contrato 17 columnas"]
+        base["base.py<br/>HTTP ético + guardado/dedupe/snapshots"]
+        corpus["corpus.py<br/>orquestador CLI"]
+        emitir["emitir_dataset.py<br/>DuckDB + HF"]
+
+        subgraph PORTALES["portales/"]
+            spe["spe.py<br/>export oficial → parquet"]
+            elempleo["elempleo.py<br/>HTML + JSON-LD"]
+            linkedin["linkedin_jobspy.py<br/>JobSpy → esquema"]
+        end
+    end
+
+    corpus --> spe
+    corpus --> elempleo
+    corpus --> linkedin
+    spe -->|normalizar()| esquema
+    elempleo -->|normalizar()| esquema
+    linkedin -->|normalizar()| esquema
+    base --> corpus
+    base --> emitir
+    emitir --> esquema
+
+    classDef borde fill:#f3f3f3,stroke:#999;
+    classDef mod fill:#1168bd,color:#fff;
+    class SRC borde;
+    class esquema,base,corpus,emitir,spe,elempleo,linkedin mod;
+```
+
+Detalles clave por componente:
+
+- **spe.py** — fraciona el export masivo: `descargar_export_csv()` (job asíncrono), `_parsear_salario()` (bucket → `salario_min`/`salario_max`), `exportar_a_canonico()` (`id_vacante = spe-<CODIGO_VACANTE>`), `guardar_parquet()` (dedupe por `id_vacante`). Incluye reintento por TLS intermitente del portal (`verify=False` solo tras fallo SSL, con aviso).
+- **elempleo.py** — listado público con paginas SEO + detalle JSON-LD `JobPosting` (`baseSalary`, `employmentType`, `jobLocationType`…).
+- **linkedin_jobspy.py** — `scrape_jobs(site_name=["linkedin"], location="Colombia", ...)` por término; 10 búsquedas × 25.
+- **base.py** — sesión con `User-Agent: SEXTANTE-UTB-university-research/1.0`, pausas entre peticiones, `guardar_lotes()` (append + dedupe `url`) y `guardar_snapshot()`.
+- **esquema.py** — define y valida el contrato de salida único.
+- **emitir_dataset.py** — `consolidar()` une SPE+curado y añade `almacen`; puntos fuertes: `CREATE OR REPLACE TABLE vacantes` en DuckDB y shards parquet (`FILAS_POR_SHARD=60_000`) + dataset card con procedencia y ética.
+
+### Nivel 4 · Despliegue
+
+Cómo y dónde se ejecuta físicamente.
+
+```mermaid
+flowchart TB
+    subgraph MAQ["Máquina UTB · GNU/Linux (usuario pxtron)"]
+        subgraph CRON["cron daemon"]
+            cronj["⏰ 0 */6 * * *"] --> sh["scripts/capturar_6h.sh<br/>(bash, set -euo pipefail)"]
+            sh -->|">> log"| log["📁 data/snapshots/captura.log"]
+        end
+        subgraph VENV[".venv · Python 3.x"]
+            cli["python -m src.extraccion.corpus<br/>--fuentes spe|linkedin|elempleo --snapshot"]
+            emi["python -m src.extraccion.emitir_dataset"]
+        end
+        subgraph ALM["Almacenamiento local (disco)"]
+            raw[("data/raw/")]
+            snap[("data/snapshots/")]
+            emitd[("data/emitido/")]
+            ddb[("data/duckdb/sextante.duckdb")]
+        end
+    end
+
+    subgraph NET["Internet (HTTPS)"]
+        spe["🌐 buscador de empleo gov.co /backbue/v1"]
+        ee["🌐 elempleo.com"]
+        li["🌐 linkedin.com"]
+        hub["🤗 huggingface.co (datasets)"]
+    end
+
+    cli --> spe
+    cli --> ee
+    cli --> li
+    cli --> raw
+    cli --> snap
+    emi --> raw
+    emi --> snap
+    emi --> emitd
+    emi --> ddb
+    emi -->|"--hf-upload (HF_TOKEN)"| hub
+
+    classDef nodo fill:#3d3d3d,color:#fff,stroke:#222;
+    classDef ext fill:#999999,color:#fff;
+    class MAQ nodo;
+    class spe,ee,li,hub ext;
+```
+
+- Cadencia: cada 6 h, la captura completa (SPE ~415 MB + curado + emisión) se re-captura y acumula.
+- La subida a HF no es automática en el cron (evita fricciones con token); se hace bajo demanda con `--hf-upload`.
+
+---
+
+## Flujo de datos y captura periódica
+
+Misma lógica del README pero con énfasis en qué se produce en cada paso:
+
+```mermaid
+flowchart LR
+    fuentes["Fuentes"] -->|"filas en bruto (formato variable)"| norm["normalizar()\nmismo esquema 17 columnas"]
+    norm -->|"store canónico"| stores["par de stores<br/>raw/ y raw/spe/"]
+    stores -->|"cada captura"| snap["📁 snapshots/"]
+    stores -->|"consolidar()"| emit["emitir_dataset.py"]
+    emit --> duck["🐤 DuckDB tabla vacantes"]
+    emit --> hf["📦 dir dataset HF\n(—hf-upload→ hub)"]
+
+    classDef d1 fill:#1168bd,color:#fff;
+    classDef d2 fill:#d9ead3,stroke:#6aa84f;
+    classDef d3 fill:#fff2cc,stroke:#bf9000;
+    class fuentes,norm d1;
+    class stores,duck d2;
+    class snap,emit,hf d3;
+```
+
+Retención de snapshots: se conservan todos (SPE parquet ~107 MB y curado CSV); el diseño decidió mantener el CSV crudo original de los primeros cortes y **dejar de copiarlo** en capturas nuevas para ahorrar ~415 MB/captura.
+
+---
+
+## Secuencia: export asíncrono del SPE
+
+El SPE no expone un endpoint de descarga directa: se crea un job de export y se consulta su estado hasta `completed` (mecanismo oficial del propio portal).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as portales/spe.py
+    participant API as SPE /backbue/v1
+    participant JOB as Job de export
+
+    P->>API: POST /vacantes/export/csv/async
+    API-->>P: 202 {jobId, status:"queued"}
+    Note over P: base.py fija User-Agent del proyecto y pausas entre peticiones
+    loop hasta status = "completed"
+        P->>API: GET /vacantes/export/csv/async/{jobId}/status
+        API-->>P: processing … completed
+    end
+    P->>API: GET /vacantes/export/csv/async/{jobId}/download
+    API-->>P: 200 CSV ~415 MB (UTF-8 con BOM)
+    P->>P: exportar_a_canonico() → guardar_parquet()
+```
+
+Resultado del último export: **284.958 filas → 246.551 únicas** en el store por `id_vacante` (el export incluye duplicados del mismo `CODIGO_VACANTE` que se descartan en `guardar_parquet()`).
+
+---
+
+## Modelo de datos
+
+### Diagrama entidad–relación
+
+```mermaid
+erDiagram
+    VACANTE {
+        text id_vacante PK "spe-<CODIGO_VACANTE>" 
+        text portal "spe | elempleo | linkedin"
+        text url "enlace original"
+        text titulo "cargo"
+        text empresa "prestador/empleador"
+        text ciudad "municipio (SPE)"
+        text departamento "nativo SPE"
+        text fecha_publicacion "formato de origen"
+        text descripcion "texto libre → NLP"
+        text salario_texto "bucket de origen"
+        number salario_min "COP/mes"
+        number salario_max "COP/mes"
+        text tipo_contrato "nativo SPE"
+        text modalidad "Teletrabajo si SPE TELETRABAJO=1"
+        text nivel_educativo "nativo SPE"
+        text experiencia_texto "N meses (SPE)"
+        text fecha_captura "%Y-%m-%d %H:%M:%S"
+        text almacen "spe|curado (DuckDB)"
+    }
+```
+
+### Diccionario / cobertura
+
+| Columna | Nativa en | Cobertura SPE | Notas |
+| --- | --- | --- | --- |
+| `id_vacante` | todas | 100% | SPE: `spe-<CODIGO_VACANTE>` |
+| `portal` | todas | 100% | etiqueta de fuente |
+| `url` | todas | 100% | SPE: `URL_DETALLE_VACANTE` |
+| `titulo` | todas | 100% | `TITULO_VACANTE` |
+| `empresa` | SPE/ElEmpleo | ~100% | `NOMBRE_PRESTADOR` |
+| `ciudad` | SPE/ElEmpleo | ~100% | `MUNICIPIO` |
+| `departamento` | SPE | ~100% | antes de SPE estaba a 0% |
+| `fecha_publicacion` | todas | ~100% | formato de origen |
+| `descripcion` | todas | 100% | base del NLP |
+| `salario_texto` | SPE/ElEmpleo | ~100% | bucket SPE |
+| `salario_min`/`salario_max` | SPE | ~78% | derivadas del bucket |
+| `tipo_contrato` | SPE/ElEmpleo | ~100% | contrato SPE |
+| `modalidad` | todas | ~0.8% teletrabajo | SPE `TELETRABAJO=1` |
+| `nivel_educativo` | SPE | ~100% | antes a 0% |
+| `experiencia_texto` | SPE | ~100% | `MESES_EXPERIENCIA_CARGO` |
+| `fecha_captura` | todas | 100% | estampa `%Y-%m-%d %H:%M:%S` |
+| `almacen` (DuckDB) | emisión | — | `spe`/`curado` |
+
+---
+
+## Decisiones de diseño
+
+| Tema | Decisión | Motivo |
+| --- | --- | --- |
+| Fuente maestra | SPE export oficial (API `/backbue/v1`) | Datos del Estado, mecanismo oficial, ~285 k ofertas/captura, cobertura ~100% de campos clave. |
+| Dedupe por fuente | SPE por `id_vacante` (CODIGO_VACANTE); curado por `url` | Varias vacantes distintas del SPE comparten `url` del prestador; orden de prioridad por registro. |
+| Esquema | 17 columnas canónicas únicas (`esquema.py`) | Contrato de salida único; `normalizar()` antes de guardar, `validar()` en EDA. |
+| Cadencia de captura | cron `0 */6 * * *` | Balance entre frescura de datos y carga sobre el portal estatal (antes se evaluó 12 h y 1 h). |
+| Snapshots SPE | solo parquet canónico (sin CSV crudo) | El CSV crudo es 415 MB; el parquet basta como corte reproducible. |
+| TLS intermitente del SPE | `verify=False` **solo** tras fallo de validación | Sitio estatal solo-lectura; se avisa en `warnings`. |
+| Publicación | dataset **privado** HF `pxtron/vacantes-colombia` | Uso académico; sin redistribución pública de datos de portales terceros. |
+| Subida HF | manual (`--hf-upload` con `HF_TOKEN`) | Evitar meter el token en el cron y subir 108 MB innecesariamente en cada corrida. |
+| Almacenamiento | DuckDB local + parquet en disco | Analítica sin servidor; el parquet está listo para `polars`/`pyarrow`/`spark` si hace falta. |
+
+Texto original en español. La versión en inglés (**[architecture.en.md](architecture.en.md)**) es la traducción de referencia.
