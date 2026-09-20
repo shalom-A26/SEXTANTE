@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Captura periódica de vacantes (diseñada para ejecutarse cada 6 horas).
+# Captura manual de vacantes (uso local/desarrollo; la captura automática corre
+# en GitHub Actions: .github/workflows/captura_6h.yml, cada 6 h → Hugging Face).
 # - SPE: export oficial total → store canónico parquet (incremental por CODIGO_VACANTE).
 # - Corpus curado (El Empleo + LinkedIn): append + dedupe por url.
 # - Copia snapshot con marca de tiempo a data/snapshots/.
@@ -22,5 +23,6 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] emisión dataset (DuckDB + HF)..." >> "$LOG
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] captura completada." >> "$LOG"
 
-# Instalación del cron (cada 6 horas), como usuario actual:
+# El cron local está desactivado (la captura automática la hace GitHub Actions).
+# Para re-ejecutar el cron local (solo por desarrollo):
 #   crontab -e  →  añadir:  0 */6 * * * cd "$HOME/Documents/SEXTANTE" && ./scripts/capturar_6h.sh

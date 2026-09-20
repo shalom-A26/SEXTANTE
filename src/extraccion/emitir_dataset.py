@@ -80,8 +80,24 @@ def emitir_duckdb(unido: pd.DataFrame) -> Path:
     return RUTA_DUCKDB
 
 
+def _staging_store(dir_ds: Path) -> None:
+    """Copia los stores canónicos dentro del dataset (carpeta `store/`).
+
+    Con esto Hugging Face es la memoria persistente del pipeline: el dataset
+    contiene tanto el dataset unificado (shards de 17 columnas) como el corpus
+    acumulado en bruto (parquet del SPE + CSV del curado), que `sync_hf --pull`
+    restaura antes de cada captura.
+    """
+    store_dir = dir_ds / "store"
+    store_dir.mkdir(exist_ok=True)
+    if RUTA_PARQUET_SPE.exists():
+        shutil.copy2(RUTA_PARQUET_SPE, store_dir / "vacantes_spe.parquet")
+    if base.RUTA_VACANTES.exists():
+        shutil.copy2(base.RUTA_VACANTES, store_dir / "vacantes_curado.csv")
+
+
 def emitir_hf(unido: pd.DataFrame, repo_id: str) -> Path:
-    """Genera el directorio del dataset (shards parquet + dataset card)."""
+    """Genera el directorio del dataset (shards parquet + dataset card + store)."""
     dir_ds = RUTA_EMITIDO / NOMBRE_DATASET
     data_dir = dir_ds / "data"
     if data_dir.exists():
@@ -98,6 +114,7 @@ def emitir_hf(unido: pd.DataFrame, repo_id: str) -> Path:
 
     card = _dataset_card(unido, n_shards)
     (dir_ds / "README.md").write_text(card, encoding="utf-8")
+    _staging_store(dir_ds)
     print(f"[hf] {len(unido)} vacantes en {n_shards} shard(s) -> {dir_ds} (repo {repo_id})")
     return dir_ds
 
@@ -135,6 +152,16 @@ Universidad Tecnológica de Bolívar).
 
 Los criterios éticos completos están en `docs/viabilidad_fuentes.md`
 (`docs/viabilidad_fuentes.en.md` en inglés).
+
+## Carpeta `store/` (memoria del pipeline)
+
+Además del dataset unificado, este repositorio guarda el corpus acumulado:
+
+- `store/vacantes_spe.parquet` — store canónico del SPE (dedupe por `CODIGO_VACANTE`).
+- `store/vacantes_curado.csv` — corpus curado (El Empleo + LinkedIn, dedupe por `url`).
+
+El pipeline de captura (`src/extraccion/sync_hf.py`) los restaura antes de cada
+corrida para seguir acumulando; cada captura los reescribe (misma ruta).
 
 ## Columnas
 

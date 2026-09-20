@@ -1,6 +1,6 @@
 # SEXTANTE Architecture
 
-> **🌐 English** · [Versión en español](arquitectura.md) · [README](../README.en.md)
+> [Spanish](arquitectura.md) · [English](architecture.en.md) · [README](../README.en.md)
 
 C4 model of the platform (context, containers, components and deployment), main data flows, capture sequences and data model. All diagrams are written in **Mermaid** so they render in docs, editors and GitHub.
 
@@ -25,11 +25,11 @@ SEXTANTE is an ETL/ELT pipeline for Colombian job vacancies:
 
 1. **Extracts** from three sources: the official SPE export (massive, ~285k rows/capture), El Empleo (HTML + JSON-LD) and LinkedIn (JobSpy).
 2. **Normalises** everything to the **17-column canonical schema** (`src/extraccion/esquema.py`, `normalizar()` / `validar()`).
-3. **Stores** into two stores: canonical big corpus in parquet (SPE) and curated corpus in CSV (El Empleo + LinkedIn), with timestamped snapshots.
-4. **Emits** the unified dataset to local DuckDB and a Hugging Face-ready directory (`emitir_dataset.py`; optional upload with `--hf-upload`).
-5. **Capture is automatic** every 6 hours via cron (`scripts/capturar_6h.sh`).
+3. **Stores** into two stores: canonical big corpus in parquet (SPE) and curated corpus in CSV (El Empleo + LinkedIn).
+4. **Persistent memory = Hugging Face**: `sync_hf.py` restores the accumulated corpus (`store/`) before each run; `emitir_dataset.py` rewrites it into HF together with the unified dataset (17-column shards).
+5. **Capture is automatic every 6 hours** on **GitHub Actions** (`.github/workflows/captura_6h.yml`); the local cron is disabled and `scripts/capturar_6h.sh` remains for manual development use.
 
-Current state: **246,782 vacancies** in DuckDB (246,551 SPE + 231 curated), private HF dataset `pxtron/vacantes-colombia`, active cron capture `0 */6 * * *`.
+Current state: **246,782 vacancies** in local DuckDB (246,551 SPE + 231 curated), private HF dataset `pxtron/vacantes-colombia` (shards + `store/`), active workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia time).
 
 ---
 
@@ -41,18 +41,18 @@ Who uses the system and the external systems it interacts with.
 
 ```mermaid
 flowchart LR
-    u["🧑‍🏫 UTB team<br/>Analytics and Data Mining"]
+    u["UTB team<br/>Analytics and Data Mining"]
     s{{"SEXTANTE<br/>Colombian labour-market<br/>analytics"}}
-    spe["🌐 SPE · Job Search<br/>buscadordeempleo.gov.co<br/>API /backbue/v1"]
-    ee["🌐 El Empleo<br/>elempleo.com"]
-    li["🌐 LinkedIn<br/>via JobSpy"]
-    hf["🤗 Hugging Face Hub<br/>pxtron/vacantes-colombia (private)"]
+    spe["SPE · Job Search<br/>buscadordeempleo.gov.co<br/>API /backbue/v1"]
+    ee["El Empleo<br/>elempleo.com"]
+    li["LinkedIn<br/>via JobSpy"]
+    hf["Hugging Face Hub<br/>pxtron/vacantes-colombia (private)"]
 
     u -->|configures, runs, queries| s
     s -->|"official CSV export (3 requests/capture)"| spe
     s -->|"public listings + JSON-LD detail"| ee
     s -->|"term searches"| li
-    s -->|"publishes private dataset (HF_TOKEN)"| hf
+    s -->|"rewrites accumulated corpus (store/) + unified dataset"| hf
     s -.->|"only public offer information"| u
 
     classDef sist fill:#1168bd,color:#fff,stroke:#0b4884;
@@ -61,63 +61,69 @@ flowchart LR
     class spe,ee,li,hf ext;
 ```
 
-- **UTB team**: configures, runs and queries results (CLI + validation notebook).
+- **UTB team**: configures and runs the workflow (Repo Actions) and queries results (CLI + validation notebook + HF dataset).
 - **SPE**: external state system from which the full export is downloaded (official mechanism, no scraping).
 - **El Empleo** and **LinkedIn**: portals scraped under ethical criteria (throttling, identifiable UA, robots.txt).
-- **Hugging Face Hub**: publishing target for the dataset (private, academic).
+- **Hugging Face Hub**: the pipeline's persistent memory and the dataset publishing target (private, academic).
 
 ### Level 2 · Containers
 
-Decomposition of the system into executable and high-level storage containers.
+Decomposition of the system into executable and storage containers.
 
 ```mermaid
 flowchart TB
-    subgraph SEXTANTE["SEXTANTE (GNU/Linux, user pxtron)"]
-        oracle["🚀 CLI · python -m src.extraccion.corpus<br/>collection orchestrator"]
-        crun["⏰ cron 0 */6 * * * ·<br/>scripts/capturar_6h.sh"]
-        emit["🚀 CLI · python -m src.extraccion.emitir_dataset<br/>DuckDB + HF emission"]
-        eda["📓 Jupyter Notebook<br/>eda_validacion.ipynb"]
+    subgraph RUNNER["GitHub Actions · Ubuntu runner (ephemeral, per run)"]
+        wf["Workflow captura_6h.yml"]
+        sync["sync_hf.py<br/>--pull/restore + uploads store/"]
+        corpus["corpus.py<br/>collection orchestrator"]
+        emit["emitir_dataset.py<br/>HF + DuckDB emission"]
 
-        subgraph STREAM["Data storage"]
-            storespe[("🗄 parquet<br/>data/raw/spe/vacantes_spe.parquet")]
-            storecu[("📄 CSV<br/>data/raw/vacantes.csv")]
-            snaps["📁 Snapshots<br/>data/snapshots/"]
-            duckdb[("🐤 DuckDB<br/>sextante.duckdb · vacantes table")]
-            hfdir["📦 HF dataset dir<br/>data/emitido/vacantes-colombia/"]
+        subgraph EPHEMERAL["data/ on the runner (discarded when done)"]
+            storespe[("parquet<br/>data/raw/spe/vacantes_spe.parquet")]
+            storecu[("CSV<br/>data/raw/vacantes.csv")]
+            emitd[("dataset dir<br/>data/emitido/vacantes-colombia/")]
         end
     end
 
-    spe["🌐 SPE /backbue/v1"]
-    ee["🌐 El Empleo"]
-    li["🌐 LinkedIn (JobSpy)"]
-    hub["🤗 HF Hub"]
+    subgraph LOCAL["UTB machine (manual development)"]
+        shdev["scripts/capturar_6h.sh"]
+        notebook["Jupyter · eda_validacion.ipynb"]
+    end
 
-    crun --> oracle
-    oracle -->|"POST /export/csv/async + POLL + GET download"| spe
-    oracle -->|"GET listings + JSON-LD detail"| ee
-    oracle -->|"scrape_jobs(...)"| li
-    oracle --> storespe
-    oracle --> storecu
-    oracle --> snaps
+    spe["SPE /backbue/v1"]
+    ee["El Empleo"]
+    li["LinkedIn (JobSpy)"]
+    hub["HF Hub (persistent)<br/>store/ + data/ shards"]
+
+    wf --> sync
+    sync --> hub
+    wf --> corpus
+    corpus -->|"POST /export/csv/async + POLL + GET download"| spe
+    corpus -->|"GET listings + JSON-LD detail"| ee
+    corpus -->|"scrape_jobs(...)"| li
+    corpus --> storespe
+    corpus --> storecu
+    wf --> emit
     emit --> storespe
     emit --> storecu
-    emit --> duckdb
-    emit --> hfdir
-    hfdir -->|"--hf-upload"| hub
-    eda --> duckdb
-    eda --> storespe
-    eda --> storecu
+    emit --> emitd
+    emitd -->|"--hf-upload (HF_TOKEN) · rewrite"| hub
+    shdev -.->|"same logic locally"| corpus
+    notebook --> hub
+    notebook --> storespe
+    notebook --> storecu
 
     classDef cont fill:#1168bd,color:#fff,stroke:#0b4884;
-    classDef almacen fill:#1168bd,color:#fff,stroke:#0b4884;
+    classDef almacen fill:#d9ead3,stroke:#6aa84f;
     classDef ext fill:#999999,color:#fff,stroke:#6b6b6b;
-    class oracle,crun,emit,eda cont;
-    class storespe,storecu,snaps,duckdb,hfdir almacen;
+    class wf,sync,corpus,emit,shdev,notebook cont;
+    class storespe,storecu,emitd almacen;
     class spe,ee,li,hub ext;
 ```
 
-- **corpus.py**: orchestrates sources, applies `normalizar()`, saves with dedupe and snapshots.
-- **emitir_dataset.py**: consolidates both stores and writes DuckDB + HF directory.
+- **corpus.py**: orchestrates sources, applies `normalizar()`, saves with dedupe and, in manual mode, snapshots.
+- **sync_hf.py**: the gateway to persistent memory — restores `store/vacantes_spe.parquet` and `store/vacantes_curado.csv` from HF before capturing.
+- **emitir_dataset.py**: consolidates both stores, writes DuckDB (local, analytics) and generates the HF directory that is later uploaded with `--hf-upload` (17-column shards **+** `store/`).
 - **DuckDB**: local analytics database; `vacantes` table with 17 canonical columns + `almacen` (`spe`/`curado`).
 - **Jupyter**: EDA validating schema and coverage.
 
@@ -131,7 +137,8 @@ flowchart LR
         schema["esquema.py<br/>17-column contract"]
         base["base.py<br/>ethical HTTP + save/dedupe/snapshots"]
         corpus["corpus.py<br/>CLI orchestrator"]
-        emitir["emitir_dataset.py<br/>DuckDB + HF"]
+        sync["sync_hf.py<br/>restores store/ from HF"]
+        emitir["emitir_dataset.py<br/>DuckDB + HF (shards + store/)"]
 
         subgraph PORTALS["portales/"]
             spe["spe.py<br/>official export → parquet"]
@@ -143,102 +150,120 @@ flowchart LR
     corpus --> spe
     corpus --> ele
     corpus --> lin
-    spe -->|normalizar()| schema
-    ele -->|normalizar()| schema
-    lin -->|normalizar()| schema
+    spe -->|"normalizar()"| schema
+    ele -->|"normalizar()"| schema
+    lin -->|"normalizar()"| schema
     base --> corpus
+    sync --> base
     base --> emitir
     emitir --> schema
+    emitir --> sync
 
     classDef borde fill:#f3f3f3,stroke:#999;
     classDef mod fill:#1168bd,color:#fff;
     class SRC borde;
-    class schema,base,corpus,emitir,spe,ele,lin mod;
+    class schema,base,corpus,sync,emitir,spe,ele,lin mod;
 ```
 
 Key component details:
 
 - **spe.py** — drives the massive export: `descargar_export_csv()` (async job), `_parsear_salario()` (bucket → `salario_min`/`salario_max`), `exportar_a_canonico()` (`id_vacante = spe-<CODIGO_VACANTE>`), `guardar_parquet()` (dedupe by `id_vacante`). Includes retry for the portal's intermittent TLS (`verify=False` only after SSL failure, with a warning).
 - **elempleo.py** — public SEO listings + JSON-LD `JobPosting` detail (`baseSalary`, `employmentType`, `jobLocationType`…).
-- **linkedin_jobspy.py** — `scrape_jobs(site_name=["linkedin"], location="Colombia", ...)` per term; 10 searches × 25.
-- **base.py** — session with `User-Agent: SEXTANTE-UTB-university-research/1.0`, request pauses, `guardar_lotes()` (append + dedupe `url`) and `guardar_snapshot()`.
+- **linkedin_jobspy.py** — `scrape_jobs(site_name=["linkedin"], location="Colombia", ...)` per term; typically 10 searches × 25.
+- **base.py** — session with `User-Agent: SEXTANTE-UTB-university-research/1.0`, request pauses, `guardar_lotes()` (append + dedupe `url`), `guardar_snapshot()`.
 - **esquema.py** — defines and validates the single output contract.
-- **emitir_dataset.py** — `consolidar()` merges SPE+curated and adds `almacen`; highlights: `CREATE OR REPLACE TABLE vacantes` in DuckDB and parquet shards (`FILAS_POR_SHARD=60_000`) + dataset card with provenance and ethics.
+- **sync_hf.py** — downloads `store/` from the HF dataset (dedupe/restore); tolerates a non-existing repo on the very first run.
+- **emitir_dataset.py** — `consolidar()` merges SPE+curated and adds `almacen`; `CREATE OR REPLACE TABLE vacantes` in DuckDB, parquet shards (`FILAS_POR_SHARD=60_000`), dataset card with provenance/ethics and **`store/` staging** so HF is the persistent memory.
 
 ### Level 4 · Deployment
 
-How and where it physically runs.
+The capture pipeline runs on GitHub Actions infrastructure (ephemeral Ubuntu runner); the local machine is only for manual development/queries.
 
 ```mermaid
 flowchart TB
-    subgraph MACH["UTB machine · GNU/Linux (user pxtron)"]
-        subgraph CRON["cron daemon"]
-            cronj["⏰ 0 */6 * * *"] --> sh["scripts/capturar_6h.sh<br/>(bash, set -euo pipefail)"]
-            sh -->|">> log"| log["📁 data/snapshots/captura.log"]
+    subgraph CLOUD["GitHub Actions · private repo shalom-A26/SEXTANTE"]
+        subgraph WF["Workflow · captura_6h.yml (cron '0 5,11,17,23 * * *' UTC)"]
+            checkout["checkout"]
+            python["setup-python 3.12"]
+            deps["pip install -r requirements.txt"]
+            pull["python -m src.extraccion.sync_hf --pull"]
+            spe["python -m src.extraccion.corpus --fuentes spe"]
+            cur["python -m src.extraccion.corpus --fuentes linkedin elempleo"]
+            emit["python -m src.extraccion.emitir_dataset --hf-upload"]
         end
-        subgraph VENV[".venv · Python 3.x"]
-            cli["python -m src.extraccion.corpus<br/>--fuentes spe|linkedin|elempleo --snapshot"]
-            emi["python -m src.extraccion.emitir_dataset"]
-        end
-        subgraph STORE["Local storage (disk)"]
-            raw[("data/raw/")]
-            snap[("data/snapshots/")]
-            emitd[("data/emitido/")]
-            ddb[("data/duckdb/sextante.duckdb")]
-        end
+        CFG["Config<br/>HF_TOKEN = repo secret"]
+    end
+
+    subgraph HUB["Hugging Face Hub"]
+        dset["pxtron/vacantes-colombia (private)<br/>store/ + data/ shards"]
+    end
+
+    subgraph PC["UTB machine (manual development)"]
+        venv[".venv · scripts/capturar_6h.sh"]
+        nb["Jupyter notebook"]
     end
 
     subgraph NET["Internet (HTTPS)"]
-        spe["🌐 buscador de empleo gov.co /backbue/v1"]
-        ee["🌐 elempleo.com"]
-        li["🌐 linkedin.com"]
-        hub["🤗 huggingface.co (datasets)"]
+        speext["buscadordeempleo.gov.co /backbue/v1"]
+        ee["elempleo.com"]
+        li["linkedin.com"]
+        hfapi["huggingface.co (datasets API)"]
     end
 
-    cli --> spe
-    cli --> ee
-    cli --> li
-    cli --> raw
-    cli --> snap
-    emi --> raw
-    emi --> snap
-    emi --> emitd
-    emi --> ddb
-    emi -->|"--hf-upload (HF_TOKEN)"| hub
+    checkout --> python --> deps --> pull
+    pull --> spe --> cur --> emit
+    CFG -.-> emit
+    pull -->|"downloads store/"| hfapi
+    emit -->|"rewrite (--hf-upload)"| hfapi
+    hfapi --> dset
+    spe --> speext
+    cur --> ee
+    cur --> li
+    venv --> speext
+    venv --> ee
+    venv --> li
+    nb --> hfapi
 
     classDef nodo fill:#3d3d3d,color:#fff,stroke:#222;
     classDef ext fill:#999999,color:#fff;
-    class MACH nodo;
-    class spe,ee,li,hub ext;
+    class CLOUD,HUB,PC nodo;
+    class speext,ee,li,hfapi ext;
 ```
 
-- Cadence: every 6 h the full capture (SPE ~415 MB + curated + emission) is re-captured and accumulated.
-- HF upload is not automatic in cron (avoids token friction); it runs on demand with `--hf-upload`.
+- Cadence: every 6 h (Colombia time 00/06/12/18) the runner re-captures the SPE export, appends the curated data, and **rewrites** the accumulated corpus and the unified dataset into HF.
+- The runner is ephemeral: all local writes under `data/` are discarded when the job ends; accumulation continuity is guaranteed by `sync_hf --pull` at the start.
+- `HF_TOKEN` lives as a repository secret (never in code); the workflow only needs read permission for checkout.
+- The local machine (user pxtron) can run `scripts/capturar_6h.sh` for manual development; its local stores are seeds/queries, not the primary memory.
 
 ---
 
 ## Data flow and periodic capture
 
-Same logic as the README, emphasising what each step produces:
+A closed loop with HF as persistent memory:
 
 ```mermaid
 flowchart LR
-    fuentes["Sources"] -->|"raw rows (variable format)"| norm["normalizar()<br/>same 17-column schema"]
-    norm -->|"canonical store"| stores["pair of stores<br/>raw/ and raw/spe/"]
-    stores -->|"each capture"| snap["📁 snapshots/"]
+    hub["HF · accumulated store/"] -->|"sync_hf --pull on each run"| norm["normalizar()<br/>same 17-column schema"]
+    sources["Sources (SPE / El Empleo / LinkedIn)"] -->|"raw rows (variable format)"| norm
+    norm -->|"canonical store"| stores["pair of stores<br/>data/raw/ + data/raw/spe/"]
     stores -->|"consolidar()"| emit["emitir_dataset.py"]
-    emit --> duck["🐤 DuckDB vacantes table"]
-    emit --> hf["📦 HF dataset dir<br/>(—hf-upload→ hub)"]
+    emit --> duck["DuckDB vacantes table (local)"]
+    emit --> hfdir["HF dataset dir<br/>shards + store/"]
+    hfdir -->|"--hf-upload · rewrite"| hub
 
     classDef d1 fill:#1168bd,color:#fff;
     classDef d2 fill:#d9ead3,stroke:#6aa84f;
     classDef d3 fill:#fff2cc,stroke:#bf9000;
-    class fuentes,norm d1;
-    class stores,duck d2;
-    class snap,emit,hf d3;
+    class sources,norm d1;
+    class stores,duck,hub d2;
+    class emit,hfdir d3;
 ```
 
-Snapshot retention: all snapshots are kept (SPE parquet ~107 MB and curated CSV); the design kept the original raw CSV of the first cuts and now **stops copying it** on new captures to save ~415 MB/capture.
+Growth and storage:
+
+- The corpus grows with the **genuinely new** vacancies (dedupe by `CODIGO_VACANTE` for SPE and by `url` for curated); HF is rewritten on the same paths on each run, with no purges.
+- HF storage quota (100 GB on the free account) is measured on the repo's current content: fractions of a GB today and headroom for millions of historical rows.
+- Snapshots (`data/snapshots/`) and local DuckDB remain as manual development/registry artefacts (the runner keeps no disk).
 
 ---
 
@@ -328,11 +353,15 @@ erDiagram
 | Master source | SPE official export (API `/backbue/v1`) | State data, official mechanism, ~285k offers/capture, ~100% coverage of key fields. |
 | Per-source dedupe | SPE by `id_vacante` (CODIGO_VACANTE); curated by `url` | Several distinct SPE vacancies share the provider's `url`; record-level precedence. |
 | Schema | Single 17-column canonical schema (`esquema.py`) | Single output contract; `normalizar()` before saving, `validar()` in EDA. |
-| Capture cadence | cron `0 */6 * * *` | Balance between data freshness and load on the state portal (12 h and 1 h were also evaluated). |
-| SPE snapshots | canonical parquet only (no raw CSV) | Raw CSV is 415 MB; parquet is enough as a reproducible cut. |
+| Capture cadence | workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia) | Balance between data freshness and load on the state portal; 4 daily captures. |
+| Persistent memory | HF = canonical store (`store/`) | The runner is ephemeral; `sync_hf --pull` restores the accumulation before capturing and `emitir_dataset` rewrites it afterwards. |
+| Corpus retention | accumulation without purges (dedupe by genuinely new vacancy) | Real growth = new vacancies; HF quota is measured on the repo's current content. |
+| HF upload | automatic on every run (`--hf-upload`, `HF_TOKEN` as secret) | The corpus must grow by itself; the token lives in the repo secret, not in code. |
+| Concurrency | `concurrency: captura-periodica` (cancel-in-progress: false) | Avoids two simultaneous runs writing to HF at once. |
+| Local cron | disabled (script kept for manual development) | Automatic operation belongs to GitHub Actions; the UTB machine stays free. |
+| Snapshots | only on manual captures (canonical parquet, no raw CSV) | The raw export CSV is ~415 MB; parquet is enough as a reproducible cut. |
 | SPE intermittent TLS | `verify=False` **only** after validation failure | Read-only state site; warned via `warnings`. |
 | Publishing | **private** HF dataset `pxtron/vacantes-colombia` | Academic use; no public redistribution of third-party portal data. |
-| HF upload | manual (`--hf-upload` with `HF_TOKEN`) | Avoid putting the token in cron and re-uploading 108 MB unnecessarily each run. |
-| Storage | local DuckDB + parquet on disk | Serverless analytics; parquet is ready for `polars`/`pyarrow`/`spark` if needed. |
+| Analytics storage | local DuckDB + parquet | Serverless analytics; parquet is ready for `polars`/`pyarrow`/`spark` if needed. |
 
 Original document is in **[Spanish (arquitectura.md)](arquitectura.md)**; this English version is a translation.

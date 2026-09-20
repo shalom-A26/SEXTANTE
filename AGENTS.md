@@ -19,14 +19,21 @@ uv pip install -r requirements.txt
 
 # Emisión del dataset unificado (DuckDB local + directorio Hugging Face)
 .venv/bin/python -m src.extraccion.emitir_dataset
-HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo USUARIO/vacantes-colombia
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
 
-# Captura periódica cada 6 h
-./scripts/capturar_6h.sh   # cron: 0 */6 * * * (ver comentario dentro del script)
+# Restaurar el corpus acumulado desde Hugging Face (memoria persistente)
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
+
+# Captura manual local (desarrollo; la automática corre en GitHub Actions)
+./scripts/capturar_6h.sh   # uses local stores + snapshots; see script header
 
 # Validación del corpus (EDA)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
 ```
+
+La **captura automática** corre en GitHub Actions: `.github/workflows/captura_6h.yml`
+(cron `0 5,11,17,23 * * *` UTC = 00/06/12/18 hora de Colombia; también se puede
+disparar manualmente con `workflow_dispatch`). El cron local está desactivado.
 
 No hay suite de tests ni linter configurada aún.
 
@@ -52,6 +59,12 @@ No hay suite de tests ni linter configurada aún.
      del SPE pueden compartir `url` del prestador).
 5. Duplicados entre fuentes: distinguir con `portal`; el dedupe por defecto es `url`
    (salvo SPE, que usa `CODIGO_VACANTE`).
+6. **Memoria persistente = Hugging Face** (`pxtron/vacantes-colombia`, carpeta `store/`):
+   antes de capturar hay que restablecer el corpus acumulado con
+   `sync_hf.py --pull`; `emitir_dataset.py` reescribe `store/` junto con el dataset
+   unificado. El runner de GitHub Actions es efímero: sin este paso no hay acumulación.
+7. **Secrets**: `HF_TOKEN` vive como secret del repositorio (GitHub). Nunca pegar
+   tokens por el chat ni committearlos; al rotarlos, actualizar el secret.
 
 ## Dominio / glosario
 
@@ -69,34 +82,40 @@ No hay suite de tests ni linter configurada aún.
   estructura de `data/`, guardado incremental con dedupe.
 - `src/extraccion/corpus.py` — orquestador CLI (`python -m src.extraccion.corpus`);
   flag `--snapshot` para cortes con marca de tiempo en `data/snapshots/`.
+- `src/extraccion/sync_hf.py` — restaura el corpus acumulado desde HF (`--pull`)
+  hacia `data/raw/` y `data/raw/spe/` antes de cada corrida.
 - `src/extraccion/emitir_dataset.py` — consolida corpus grande + curado y emite
   a DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y a un
   directorio de dataset Hugging Face (`data/emitido/vacantes-colombia/`).
-  `--hf-upload` publica un dataset privado (requiere `HF_TOKEN`).
+  `--hf-upload` sube a un dataset privado (requiere `HF_TOKEN`) e incluye la
+  carpeta `store/` (stores canónicos) para que HF sea la memoria persistente.
 - `src/extraccion/portales/spe.py` — export oficial total del SPE (job asíncrono `/backbue/v1`)
   → esquema canónico → parquet. `verify=False` solo como reintento ante TLS intermitente del portal.
 - `src/extraccion/portales/elempleo.py` — listado HTML + detalle JSON-LD `JobPosting`.
 - `src/extraccion/portales/linkedin_jobspy.py` — JobSpy (`python-jobspy`) → esquema canónico.
-- `scripts/capturar_6h.sh` — captura SPE + curado + emisión, con `--snapshot`.
+- `.github/workflows/captura_6h.yml` — captura automática cada 6 h en GitHub Actions
+  (pull de HF → SPE → curado → emisión/upload; `HF_TOKEN` desde secrets; summary en la corrida).
+- `scripts/capturar_6h.sh` — captura manual local (SPE + curado + emisión, con `--snapshot`).
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
 
 ## Estado y pendientes
 
-- ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~246.5k vacantes únicas
+- **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~246.5k vacantes únicas
   acumuladas, ~285k filas por export, 2021–2026, cobertura ~100% en descripción/nivel
   educativo/departamento/contrato/salario/experiencia).
-- ✅ Corpus curado ~231 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
-- ✅ Captura periódica: `scripts/capturar_6h.sh` (cron `0 */6 * * *` activado y validado).
-- ✅ Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
-- ✅ Dataset HF privado publicado: `pxtron/vacantes-colombia` (ver HF_TOKEN rotado para re-subidas).
+- Corpus curado ~231 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
+- Captura automática: **GitHub Actions** `.github/workflows/captura_6h.yml` cada 6 h
+  (cron local desactivado; `scripts/capturar_6h.sh` queda para uso manual).
+- Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
+- Memoria persistente: dataset HF privado `pxtron/vacantes-colombia` (shards + carpeta `store/`).
 - Pendientes: los módulos `procesamiento/`, `analisis/`, `grafos/`.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.
 
 ## Documentación (bilingüe)
 
-- `README.md` / `README.en.md` — descripción, uso y estado (español ✔ / inglés).
+- `README.md` / `README.en.md` — descripción, uso y estado (español / inglés).
 - `docs/arquitectura.md` / `docs/architecture.en.md` — modelo C4 (contexto, contenedores,
   componentes, despliegue), flujos, secuencias y modelo de datos; **todos los diagramas en Mermaid**.
-- `docs/viabilidad_fuentes.md` / `docs/viabilidad_fuentes.en.md` — estudio de fuentes (español ✔ / inglés).
+- `docs/viabilidad_fuentes.md` / `docs/viabilidad_fuentes.en.md` — estudio de fuentes (español / inglés).
 - Regla: al cambiar arquitectura o diagramas, actualizar ambas versiones (mantener sincronía).

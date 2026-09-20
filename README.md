@@ -1,6 +1,6 @@
 # SEXTANTE
 
-> **🌐 Español** · [English version](README.en.md) · [Arquitectura (C4 + flujos)](docs/arquitectura.md)
+> [Español](README.md) · [English version](README.en.md) · [Arquitectura (C4 + flujos)](docs/arquitectura.md)
 
 Plataforma de analítica y minería de datos para navegar el mercado laboral colombiano a través de habilidades, perfiles, salarios y tendencias de demanda.
 
@@ -33,104 +33,100 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 
 ## Estado actual
 
-- ✅ **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **SPE** (export oficial), **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
-- ✅ **Corpus grande SPE**: `data/raw/spe/vacantes_spe.parquet` (~246,5k vacantes únicas acumuladas por `CODIGO_VACANTE`, 2021→hoy, cobertura ~100% en descripción, nivel educativo, departamento, rango salarial, contrato y experiencia).
-- ✅ **Corpus curado**: `data/raw/vacantes.csv` (231 vacantes de El Empleo + LinkedIn, sin duplicados por `url`).
-- ✅ **Dataset unificado**: **246.782 vacantes** en DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y dataset Hugging Face privado **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)** (5 shards parquet). Directorio local listo para publicar en `data/emitido/vacantes-colombia/`.
-- ✅ **Captura periódica automática**: cron `0 */6 * * *` (00:00, 06:00, 12:00, 18:00) ejecuta `scripts/capturar_6h.sh` (SPE + curado + emisión). Log en `data/snapshots/captura.log`, cortes con marca de tiempo en `data/snapshots/`.
-- ✅ **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica esquema y cobertura de campos).
-- ⏳ Siguiente: módulos `procesamiento/`, `analisis/` y `grafos/` (NLP/habilidades ESCO, clustering salarial, grafos de ocupaciones; posible Apache Spark según volumen).
+- **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **SPE** (export oficial), **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
+- **Corpus grande SPE**: `vacantes_spe.parquet` (~246,5k vacantes únicas acumuladas por `CODIGO_VACANTE`, 2021→hoy, cobertura ~100% en descripción, nivel educativo, departamento, rango salarial, contrato y experiencia).
+- **Corpus curado**: `data/raw/vacantes.csv` (231 vacantes de El Empleo + LinkedIn, sin duplicados por `url`).
+- **Dataset unificado**: **246.782 vacantes** en DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y dataset Hugging Face privado **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)** (5 shards parquet).
+- **Captura automática en la nube**: workflow de **GitHub Actions** (repo privado) cada 6 horas. **Hugging Face es la memoria persistente** del pipeline (`store/`); el cron local está desactivado y el corpus se acumula sin purgas.
+- **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica esquema y cobertura de campos).
+- Pendiente: módulos `procesamiento/`, `analisis/` y `grafos/` (NLP/habilidades ESCO, clustering salarial, grafos de ocupaciones; posible Apache Spark según volumen).
 
 ## Arquitectura en una vista (C4 · Nivel 1 — Contexto)
 
 ```mermaid
 flowchart LR
-    u["🧑‍🏫 Equipo UTB<br/>Analítica y Minería de Datos"]
+    u["Equipo UTB<br/>Analítica y Minería de Datos"]
     s{{"SEXTANTE<br/>plataforma de analítica<br/>del mercado laboral"}}
-    spe["🌐 SPE · Buscador de Empleo<br/>(export oficial /backbue/v1)"]
-    ee["🌐 El Empleo<br/>(HTML + JSON-LD)"]
-    li["🌐 LinkedIn<br/>(JobSpy)"]
-    hf["🤗 Hugging Face Hub<br/>pxtron/vacantes-colombia (privado)"]
-    dk[("🗄 DuckDB local<br/>sextante.duckdb")]
+    spe["SPE · Buscador de Empleo<br/>(export oficial /backbue/v1)"]
+    ee["El Empleo<br/>(HTML + JSON-LD)"]
+    li["LinkedIn<br/>(JobSpy)"]
+    hf["Hugging Face Hub<br/>pxtron/vacantes-colombia (privado)"]
 
     u --> s
     s --> spe
     s --> ee
     s --> li
-    s --> dk
     s --> hf
 
     classDef sistema fill:#1168bd,color:#fff,stroke:#0b4884;
     classDef externo fill:#999999,color:#fff,stroke:#6b6b6b;
-    classDef almacen fill:#1168bd,color:#fff,stroke:#0b4884;
     class s sistema;
     class spe,ee,li,hf externo;
-    class dk almacen;
 ```
 
 Diagramas completos del modelo C4 (contexto, contenedores, componentes, despliegue), secuencias de captura y modelo de datos en [`docs/arquitectura.md`](docs/arquitectura.md) (en español) y [`docs/architecture.en.md`](docs/architecture.en.md) (en inglés).
 
-## Flujo de datos del pipeline
+## Flujo de datos del pipeline (nube)
 
 ```mermaid
 flowchart TB
-    subgraph FUENTES[Fuentes]
-        sp["SPE · export oficial<br/>CSV ~415 MB · ~285 k filas"]
-        ee["El Empleo · HTML + JSON-LD"]
-        li["LinkedIn · JobSpy"]
+    subgraph GH["GitHub Actions (runner efímero)"]
+        wf["Workflow captura_6h.yml<br/>cron '0 5,11,17,23 * * *' UTC = 00/06/12/18 Colombia"]
+        pull["sync_hf --pull<br/>restaura corpus acumulado desde HF"]
+        sp["corpus --fuentes spe<br/>export oficial ~285 k filas"]
+        cu["corpus --fuentes linkedin elempleo<br/>append + dedupe por url"]
+        em["emitir_dataset --hf-upload<br/>shards 17 columnas + store/"]
     end
 
-    sp -->|CODIGO_VACANTE| dn{{"normalizar()<br/>esquema canónico 17 columnas"}}
-    ee --> ds{{"normalizar()<br/>esquema canónico 17 columnas"}}
-    li --> ds
+    hub["HF Hub (memoria persistente)<br/>pxtron/vacantes-colombia"]
+    fsp["SPE /backbue/v1"]
+    fee["El Empleo"]
+    fli["LinkedIn"]
 
-    dn --> p1[("data/raw/spe/vacantes_spe.parquet<br/>246.551 únicas")]
-    ds --> p2[("data/raw/vacantes.csv<br/>231 vacantes")]
+    wf --> pull
+    pull -->|"store/vacantes_spe.parquet · store/vacantes_curado.csv"| hub
+    sp -->|"descarga CSV"| fsp
+    cu --> fee
+    cu --> fli
+    sp --> em
+    cu --> em
+    em -->|"reescribe shards + store/ en cada corrida"| hub
 
-    p1 --> snap1["📁 data/snapshots/spe/ (parquet · cada captura)"]
-    p2 --> snap2["📁 data/snapshots/ (CSV · cada captura)"]
-
-    p1 --> cons["🧮 consolidar()"]
-    p2 --> cons
-    cons --> dk[("DuckDB · tabla vacantes<br/>246.782 filas")]
-    cons --> hfdir["data/emitido/vacantes-colombia/<br/>shards parquet + dataset card"]
-    hfdir --> hub["🤗 HF Hub privado<br/>(pxtron/vacantes-colombia)"]
-
-    cron["⏰ cron 0 */6 * * *<br/>capturar_6h.sh"] --> FUENTES
-
-    classDef dfuente fill:#1168bd,color:#fff;
-    classDef dstore fill:#d9ead3,stroke:#6aa84f;
-    classDef demit fill:#fff2cc,stroke:#bf9000;
-    class sp,ee,li dfuente;
-    class p1,p2,dk dstore;
-    class hfdir,hub,cons demit;
+    classDef nube fill:#1168bd,color:#fff,stroke:#0b4884;
+    classDef ext fill:#999999,color:#fff,stroke:#6b6b6b;
+    class wf,pull,sp,cu,em nube;
+    class hub,fsp,fee,fli ext;
 ```
+
+El runner se descarta al terminar; **todo el corpus acumulado vive en HF**. Cada corrida baja el acumulado (`sync_hf`), le agrega las vacantes nuevas y lo reescribe en HF (misma ruta, mismo dataset). El crecimiento real proviene de las vacantes nuevas que aún no existían en el store, deduplicadas por `CODIGO_VACANTE` (SPE) o por `url` (curado); no hay purgas.
 
 ## Captura periódica (secuencia)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Cron
-    participant sh as capturar_6h.sh
+    actor Sched as Schedule de GitHub Actions
+    participant wf as captura_6h.yml
+    participant sy as sync_hf.py
     participant cp as corpus.py
     participant sp as portales/spe.py
-    participant raw as stores (parquet/CSV)
     participant em as emitir_dataset.py
-    participant sal as DuckDB + dir HF
+    participant hub as HF Hub (pxtron/vacantes-colombia)
 
-    Cron->>sh: disparo cada 6 h (00/06/12/18)
-    sh->>cp: --fuentes spe --snapshot
+    Sched->>wf: disparo cada 6 h (cron UTC)
+    wf->>sy: --pull (HF_TOKEN = secret del repo)
+    sy->>hub: descarga store/ (si existe)
+    hub-->>wf: store restaurado en data/raw/
+    wf->>cp: --fuentes spe
     cp->>sp: descargar_export_csv()
     sp->>sp: job async → POLL status → DOWNLOAD CSV
-    sp-->>raw: export CSV ~285 k filas
-    cp->>raw: guardar_parquet()<br/>(dedupe por id_vacante + snapshot)
-    sh->>cp: --fuentes linkedin elempleo --snapshot
-    cp->>raw: guardar_lotes()<br/>(append + dedupe por url + snapshot)
-    sh->>em: emitir_dataset.py
-    em->>raw: consolidar()
-    em-->>sal: DuckDB (246.782) + dir dataset HF
-    em-->>sh: ok → captura.log
+    cp->>cp: guardar_parquet()<br/>(dedupe por CODIGO_VACANTE)
+    wf->>cp: --fuentes linkedin elempleo
+    cp->>cp: guardar_lotes()<br/>(append + dedupe por url)
+    wf->>em: emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
+    em->>em: consolidar() → shards parquet + store/
+    em->>hub: reescribe shards + store/ (mismo dataset)
+    em-->>wf: Summary en la corrida
 ```
 
 ## Metodología
@@ -149,10 +145,10 @@ sequenceDiagram
 
 | Fuente | Estado | Detalle |
 | --- | --- | --- |
-| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Activa | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono, mecanismo oficial del portal). ~285 k filas por captura → store canónico deduplicado por `CODIGO_VACANTE`. Cobertura ~100% en descripción, departamento, nivel educativo, contrato, salario y experiencia. |
-| **El Empleo** (`elempleo.com/co/`) | ✔ Activa | HTML público (robots.txt permisivo) + detalle JSON-LD `JobPosting`. |
-| **LinkedIn** (vía JobSpy) | ✔ Activa | `python-jobspy`; descripciones completas sin autenticación. |
-| Computrabajo / Indeed / Glassdoor | ✘ No viable | Bloqueos 403/errores de cliente; se descartan sin evasión (ética). |
+| **SPE – export oficial** (`buscadordeempleo.gov.co`) | Activa | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono, mecanismo oficial del portal). ~285 k filas por captura → store canónico deduplicado por `CODIGO_VACANTE`. Cobertura ~100% en descripción, departamento, nivel educativo, contrato, salario y experiencia. |
+| **El Empleo** (`elempleo.com/co/`) | Activa | HTML público (robots.txt permisivo) + detalle JSON-LD `JobPosting`. |
+| **LinkedIn** (vía JobSpy) | Activa | `python-jobspy`; descripciones completas sin autenticación. |
+| Computrabajo / Indeed / Glassdoor | No viable | Bloqueos 403/errores de cliente; se descartan sin evasión (ética). |
 
 La viabilidad completa y los motivos están en [`docs/viabilidad_fuentes.md`](docs/viabilidad_fuentes.md) y su versión en inglés en [`docs/viabilidad_fuentes.en.md`](docs/viabilidad_fuentes.en.md).
 
@@ -191,13 +187,15 @@ SEXTANTE/
 ├── README.en.md              # Documentation (English)
 ├── AGENTS.md                 # Guía para agentes de IA que trabajen en el repo
 ├── requirements.txt
+├── .github/workflows/
+│   └── captura_6h.yml        # captura automática cada 6 h → Hugging Face
 ├── scripts/
-│   └── capturar_6h.sh        # captura periódica (SPE + curado + emisión; cron 0 */6 * * *)
+│   └── capturar_6h.sh        # captura manual local (desarrollo)
 ├── data/
-│   ├── raw/                  # vacantes.csv (corpus curado acumulado)
-│   │   └── spe/              # vacantes_spe.parquet (corpus grande canónico) [+ csv del export]
+│   ├── raw/                  # vacantes.csv (corpus curado acumulado, semilla)
+│   │   └── spe/              # vacantes_spe.parquet (corpus grande canónico, semilla)
 │   ├── procesados/           # datasets limpios/enriquecidos (uso futuro)
-│   ├── snapshots/            # cortes con marca de tiempo de cada captura (+ captura.log)
+│   ├── snapshots/            # cortes con marca de tiempo de capturas manuales
 │   ├── emitido/              # dataset listo para Hugging Face (parquet + card)
 │   └── duckdb/               # sextante.duckdb (tabla vacantes, local)
 ├── notebooks/
@@ -207,7 +205,8 @@ SEXTANTE/
 │   │   ├── esquema.py        #   contrato de 17 columnas
 │   │   ├── base.py           #   HTTP ético, guardado + dedupe + snapshots
 │   │   ├── corpus.py         #   orquestador (python -m ...)
-│   │   ├── emitir_dataset.py #   DuckDB local + dataset Hugging Face
+│   │   ├── sync_hf.py        #   restaura el corpus acumulado desde HF (--pull)
+│   │   ├── emitir_dataset.py #   DuckDB local + dataset HF (shards + store/)
 │   │   └── portales/
 │   │       ├── spe.py               #   SPE (export oficial CSV → parquet canónico)
 │   │       ├── elempleo.py          #   El Empleo (HTML + JSON-LD)
@@ -231,7 +230,6 @@ uv pip install -r requirements.txt
 # 2a. Corpus grande SPE (export oficial total; ~3 peticiones al portal)
 .venv/bin/python -m src.extraccion.corpus --fuentes spe            # descarga export → parquet
 .venv/bin/python -m src.extraccion.corpus --fuentes spe --spe-csv vacantes_spe_latest.csv  # reusa CSV
-.venv/bin/python -m src.extraccion.corpus --fuentes spe --snapshot  # + snapshot con marca de tiempo
 
 # 2b. Corpus curado y añadirlo a data/raw/vacantes.csv
 .venv/bin/python -m src.extraccion.corpus                 # LinkedIn + El Empleo
@@ -240,9 +238,12 @@ uv pip install -r requirements.txt
 
 # 2c. Emitir el dataset unificado (DuckDB local + directorio HF)
 .venv/bin/python -m src.extraccion.emitir_dataset
-HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo TU_USUARIO/vacantes-colombia  # dataset privado en HF
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
 
-# 2d. Captura periódica cada 6 h (ver scripts/capturar_6h.sh para el cron)
+# 2d. Restaurar el corpus acumulado desde Hugging Face (memoria persistente)
+HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
+
+# 2e. Captura manual local (desarrollo); la captura automática corre en GitHub Actions
 ./scripts/capturar_6h.sh
 
 # 3. Validar el corpus (ejecutar el notebook)
@@ -255,14 +256,13 @@ Cada corrida **añade** filas nuevas y estampa `fecha_captura`: `vacantes.csv` d
 
 | Artefacto | Ruta / recurso |
 | --- | --- |
-| Log de cada captura automática | `data/snapshots/captura.log` |
-| Cortes snapshot (curado / SPE) | `data/snapshots/vacantes_*.csv` · `data/snapshots/spe/vacantes_spe_*.parquet` |
-| Corpus curado acumulado | `data/raw/vacantes.csv` |
-| Corpus grande canónico | `data/raw/spe/vacantes_spe.parquet` |
-| Base local unificada | `data/duckdb/sextante.duckdb` (tabla `vacantes`) |
-| Dataset para publicar | `data/emitido/vacantes-colombia/` |
-| Dataset privado publicado | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) |
-| Crontab activo | `crontab -l` (daemon: `systemctl status cron`) |
+| Log de cada captura automática | Pestaña **Actions** del repo (Summary de cada corrida) |
+| Corpus acumulado (memoria HF) | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) — carpeta `store/` |
+| Dataset unificado publicado | [huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data](https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data) |
+| Corpus curado local (semilla/uso manual) | `data/raw/vacantes.csv` |
+| Corpus grande canónico local (semilla/uso manual) | `data/raw/spe/vacantes_spe.parquet` |
+| Base local unificada (analítica) | `data/duckdb/sextante.duckdb` (tabla `vacantes`) |
+| Dataset local para publicar | `data/emitido/vacantes-colombia/` |
 
 ## Ética de datos (eje transversal)
 
