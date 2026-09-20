@@ -7,3 +7,9 @@ nltk
 wordcloud
 networkx
 jupyter
+requests
+beautifulsoup4
+lxml
+tenacity
+python-dateutil
+python-jobspy

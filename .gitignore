@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ipynb_checkpoints/
+*.egg-info/
+
+# OS
+.DS_Store
+
+# Datos
+data/snapshots/
