@@ -21,8 +21,8 @@ uv pip install -r requirements.txt
 .venv/bin/python -m src.extraccion.emitir_dataset
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo USUARIO/vacantes-colombia
 
-# Captura periódica cada 12 h
-./scripts/capturar_12h.sh   # cron: 0 */12 * * * (ver comentario dentro del script)
+# Captura periódica cada 6 h
+./scripts/capturar_6h.sh   # cron: 0 */6 * * * (ver comentario dentro del script)
 
 # Validación del corpus (EDA)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
@@ -77,7 +77,7 @@ No hay suite de tests ni linter configurada aún.
   → esquema canónico → parquet.
 - `src/extraccion/portales/elempleo.py` — listado HTML + detalle JSON-LD `JobPosting`.
 - `src/extraccion/portales/linkedin_jobspy.py` — JobSpy (`python-jobspy`) → esquema canónico.
-- `scripts/capturar_12h.sh` — captura SPE + curado + emisión, con `--snapshot`.
+- `scripts/capturar_6h.sh` — captura SPE + curado + emisión, con `--snapshot`.
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
 
 ## Estado y pendientes
@@ -85,7 +85,7 @@ No hay suite de tests ni linter configurada aún.
 - ✅ **Corpus grande** SPE: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas,
   2021–2026, cobertura 100% en descripción/nivel educativo/departamento/contrato/salario/experiencia).
 - ✅ Corpus curado ~224 vacantes (El Empleo + LinkedIn). Fuentes: ver `docs/viabilidad_fuentes.md`.
-- ✅ Captura periódica: `scripts/capturar_12h.sh` (cron `0 */12 * * *` pendiente de activar).
+- ✅ Captura periódica: `scripts/capturar_6h.sh` (cron `0 */6 * * *` activado y validado).
 - ✅ Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
 - Pendientes: subir el dataset privado a Hugging Face (con `HF_TOKEN`), activar el cron,
   y los módulos `procesamiento/`, `analisis/`, `grafos/`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Captura periódica de vacantes (diseñada para ejecutarse cada 12 horas).
+# Captura periódica de vacantes (diseñada para ejecutarse cada 6 horas).
 # - SPE: export oficial total → store canónico parquet (incremental por CODIGO_VACANTE).
 # - Corpus curado (El Empleo + LinkedIn): append + dedupe por url.
 # - Copia snapshot con marca de tiempo a data/snapshots/.
@@ -22,5 +22,5 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] emisión dataset (DuckDB + HF)..." >> "$LOG
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] captura completada." >> "$LOG"
 
-# Instalación del cron (cada 12 horas), como usuario actual:
-#   crontab -e  →  añadir:  0 */12 * * * cd "$HOME/Documents/SEXTANTE" && ./scripts/capturar_12h.sh
+# Instalación del cron (cada 6 horas), como usuario actual:
+#   crontab -e  →  añadir:  0 */6 * * * cd "$HOME/Documents/SEXTANTE" && ./scripts/capturar_6h.sh

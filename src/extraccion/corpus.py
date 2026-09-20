@@ -104,9 +104,8 @@ def main() -> None:
                 total = spe.guardar_parquet(df)
                 print(f"  -> {total} registros en {spe.RUTA_PARQUET_SPE}")
                 if args.snapshot:
-                    if spe.RUTA_CSV_SPE.exists():
-                        base.guardar_snapshot(spe.RUTA_CSV_SPE, prefijo="vacantes_spe_raw", subdir="spe")
-                    base.guardar_snapshot(spe.RUTA_PARQUET_SPE, prefijo="vacantes_spe", subdir="spe")
+                    snap = base.guardar_snapshot(spe.RUTA_PARQUET_SPE, prefijo="vacantes_spe", subdir="spe")
+                    print(f"  -> snapshot en {snap}")
             else:
                 agregadas = base.guardar_lotes(df)
                 print(f"  -> {agregadas} nuevas en {base.RUTA_VACANTES}")

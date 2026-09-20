@@ -27,11 +27,13 @@ from __future__ import annotations
 
 import re
 import time
+import warnings
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import requests
+from requests.exceptions import SSLError
 
 from .. import base
 from ..esquema import COLUMNAS_ESQUEMA, normalizar
@@ -45,16 +47,29 @@ RUTA_PARQUET_SPE = RUTA_SPE / "vacantes_spe.parquet"
 _POLL_DEMORA = 2.0
 
 
-def _get(url: str, **kwargs) -> requests.Response:
+def _request(method: str, url: str, **kwargs) -> requests.Response:
+    """GET/POST al SPE con User-Agent del proyecto.
+
+    El certificado del sitio es intermitente (cadena CA local incompleta): se
+    reenvía la petición con `verify=False` solo si la validación SSL falla.
+    """
     headers = {"User-Agent": base.UA}
     headers.update(kwargs.pop("headers", {}) or {})
-    return requests.get(url, headers=headers, timeout=(30, 300), **kwargs)
+    try:
+        return requests.request(method, url, headers=headers, timeout=(30, 300), **kwargs)
+    except SSLError:
+        warnings.warn("Validación SSL contra el SPE falló; reintentando sin verificar (sitio estatal público).")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=requests.packages.urllib3.exceptions.InsecureRequestWarning)
+            return requests.request(method, url, headers=headers, timeout=(30, 300), verify=False, **kwargs)
+
+
+def _get(url: str, **kwargs) -> requests.Response:
+    return _request("GET", url, **kwargs)
 
 
 def _post(url: str, **kwargs) -> requests.Response:
-    headers = {"User-Agent": base.UA}
-    headers.update(kwargs.pop("headers", {}) or {})
-    return requests.post(url, headers=headers, timeout=(30, 300), **kwargs)
+    return _request("POST", url, **kwargs)
 
 
 def descargar_export_csv(ruta: Path = RUTA_CSV_SPE) -> Path:

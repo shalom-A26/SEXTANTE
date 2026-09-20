@@ -34,7 +34,7 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 - ✅ **Pipeline de extracción funcional** (`src/extraccion/`): recolecta vacantes desde **SPE** (export oficial), **El Empleo** y **LinkedIn** (vía JobSpy) y las normaliza al **esquema canónico de 17 columnas**.
 - ✅ **Corpus grande SPE**: `data/raw/spe/vacantes_spe.parquet` (~196.8k vacantes únicas, 2021–2026, descripción + nivel educativo + departamento + rango salarial + contrato + experiencia; ~107 MB, dedupe por `CODIGO_VACANTE`).
 - ✅ **Corpus curado**: `data/raw/vacantes.csv` (~224 vacantes de El Empleo + LinkedIn, sin duplicados).
-- ✅ **Captura periódica**: `scripts/capturar_12h.sh` + modo `--snapshot` (cortes con marca de tiempo en `data/snapshots/`).
+- ✅ **Captura periódica**: `scripts/capturar_6h.sh` + modo `--snapshot` (cortes con marca de tiempo en `data/snapshots/`).
 - ✅ **Almacenamiento**: DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y dataset Hugging Face listo para publicar (`data/emitido/vacantes-colombia/`, shards parquet + dataset card).
 - ✅ **Sonda de viabilidad** de fuentes: `docs/viabilidad_fuentes.md`.
 - ✅ **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica el esquema y la cobertura de campos).
@@ -79,7 +79,7 @@ SEXTANTE/
 ├── AGENTS.md                # Guía para agentes de IA que trabajen en el repo
 ├── requirements.txt
 ├── scripts/
-│   └── capturar_12h.sh      # captura periódica (SPE + curado + emisión; cron 0 */12 * * *)
+│   └── capturar_6h.sh      # captura periódica (SPE + curado + emisión; cron 0 */6 * * *)
 ├── data/
 │   ├── raw/                 # vacantes.csv (corpus curado acumulado)
 │   │   └── spe/             # vacantes_spe.parquet (corpus grande canónico) [+ csv export]
@@ -128,8 +128,8 @@ uv pip install -r requirements.txt
 .venv/bin/python -m src.extraccion.emitir_dataset
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo TU_USUARIO/vacantes-colombia  # dataset privado en HF
 
-# 2d. Captura periódica cada 12 h (ver scripts/capturar_12h.sh para el cron)
-./scripts/capturar_12h.sh
+# 2d. Captura periódica cada 6 h (ver scripts/capturar_6h.sh para el cron)
+./scripts/capturar_6h.sh
 
 # 3. Validar el corpus (ejecutar el notebook)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
