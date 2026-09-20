@@ -17,6 +17,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 
 from huggingface_hub import hf_hub_download, upload_file
@@ -47,6 +48,7 @@ def descargar_estado(repo_id: str = REPO_HF_DEFECTO, token: str | None = None) -
             continue
         destino.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(cache, destino)
+        os.chmod(destino, 0o644)
         print(f"  [sync_hf] restaurado: {archivo} -> {destino}")
         restaurados += 1
     return restaurados
