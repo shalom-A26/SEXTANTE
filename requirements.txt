@@ -9,6 +9,8 @@ seaborn
 nltk
 wordcloud
 networkx
+plotly
+pyahocorasick
 jupyter
 requests
 beautifulsoup4

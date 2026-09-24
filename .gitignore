@@ -14,3 +14,9 @@ data/raw/spe/
 data/emitido/
 data/duckdb/
 *.duckdb
+
+# Taxonomías externas y artefactos analíticos reproducibles
+data/referencias/esco/*
+!data/referencias/esco/README.md
+data/procesados/grafos/*
+!data/procesados/grafos/README.md

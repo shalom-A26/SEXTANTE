@@ -31,13 +31,21 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/
 
 # Validación del corpus (EDA)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
+
+# Analítica (dataset privado HF; autenticar con `hf auth login` o HF_TOKEN)
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/dashboard_metricas.ipynb
+
+# Grafo (requiere paquete CSV oficial ESCO español en data/referencias/esco/)
+.venv/bin/python -m src.grafos.construir_grafo --repo pxtron/vacantes-colombia --esco-dir data/referencias/esco
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/grafo_habilidades_ocupaciones.ipynb
 ```
 
 La **captura automática** corre en GitHub Actions: `.github/workflows/captura_6h.yml`
 (cron `0 5,11,17,23 * * *` UTC = 00/06/12/18 hora de Colombia; también se puede
 disparar manualmente con `workflow_dispatch`). El cron local está desactivado.
 
-No hay suite de tests ni linter configurada aún.
+La capa analítica incluye pruebas con `python -m unittest discover -s tests`;
+el pipeline de extracción aún no tiene una suite propia ni linter configurado.
 
 ## Reglas del proyecto (críticas)
 
@@ -75,7 +83,8 @@ No hay suite de tests ni linter configurada aún.
 - **Portal/fuente**: sitio del que se extrae (p. ej. `elempleo`, `linkedin`, `spe`).
 - **Corpus curado**: conjunto acumulado en `data/raw/vacantes.csv`.
 - **Corpus grande**: `data/raw/spe/vacantes_spe.parquet` (export oficial SPE, ~246.5k vacantes únicas acumuladas).
-- Habilidades → taxonomía ESCO (referencia futura, no aplicada aún).
+- Habilidades → taxonomía ESCO (extracción inicial por menciones explícitas;
+  pendiente evaluación y NLP contextual).
 
 ## Arquitectura actual
 
@@ -100,6 +109,10 @@ No hay suite de tests ni linter configurada aún.
   (pull de HF → SPE → curado → emisión/upload; `HF_TOKEN` desde secrets; summary en la corrida).
 - `scripts/capturar_6h.sh` — captura manual local (SPE + curado + emisión, con `--snapshot`).
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
+- `src/analisis/` — acceso de solo lectura a shards HF y métricas laborales.
+- `src/procesamiento/habilidades.py` — menciones explícitas contra ESCO español.
+- `src/grafos/` — tablas bipartitas, similitud, comunidades y transiciones exploratorias.
+- `notebooks/dashboard_metricas.ipynb` / `grafo_habilidades_ocupaciones.ipynb` — narrativas analíticas.
 
 ## Estado y pendientes
 
@@ -111,7 +124,8 @@ No hay suite de tests ni linter configurada aún.
   (cron local desactivado; `scripts/capturar_6h.sh` queda para uso manual).
 - Emisión: DuckDB local (`data/duckdb/sextante.duckdb`) y dataset HF en `data/emitido/`.
 - Memoria persistente: dataset HF privado `pxtron/vacantes-colombia` (shards + carpeta `store/`).
-- Pendientes: los módulos `procesamiento/`, `analisis/`, `grafos/`.
+- Pendientes: evaluar la extracción ESCO, homologar ocupaciones y avanzar hacia
+  NLP contextual/modelos salariales.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.
 

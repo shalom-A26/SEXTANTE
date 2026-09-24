@@ -366,3 +366,31 @@ erDiagram
 | Almacenamiento analítico | DuckDB local + parquet | Analítica sin servidor; el parquet está listo para `polars`/`pyarrow`/`spark` si hace falta. |
 
 Texto original en español. La versión en inglés (**[architecture.en.md](architecture.en.md)**) es la traducción de referencia.
+
+---
+
+## Capa analítica y grafo cargo–habilidad
+
+La analítica consume en modo lectura los shards `data/*.parquet` del dataset
+privado `pxtron/vacantes-colombia`. `src/analisis/datos_hf.py` usa la caché de
+Hugging Face y registra el commit resuelto; no llama a colectores ni modifica
+los stores. DuckDB puede consultar directamente esos parquet.
+
+`src/procesamiento/habilidades.py` carga el CSV oficial ESCO en español y
+detecta menciones explícitas. `src/grafos/construir_grafo.py` emite nodos,
+aristas, auditoría y un manifiesto de procedencia. `metricas_grafo.py` calcula
+similitud coseno TF-IDF, comunidades y proximidades exploratorias.
+
+```mermaid
+flowchart LR
+    hf["HF privado<br/>data/*.parquet"] --> acceso["datos_hf.py<br/>lectura + revisión"]
+    acceso --> tablero["dashboard_metricas.ipynb"]
+    acceso --> extractor["habilidades.py"]
+    esco["ESCO CSV español"] --> extractor
+    extractor --> construir["construir_grafo.py"]
+    construir --> artefactos["nodos/aristas/auditoría/manifiesto"]
+    artefactos --> red["grafo_habilidades_ocupaciones.ipynb"]
+```
+
+El volumen actual no justifica Spark. Se evaluará con millones de textos o
+inferencia NLP/embeddings distribuida.

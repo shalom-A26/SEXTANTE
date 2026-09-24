@@ -365,3 +365,31 @@ erDiagram
 | Analytics storage | local DuckDB + parquet | Serverless analytics; parquet is ready for `polars`/`pyarrow`/`spark` if needed. |
 
 Original document is in **[Spanish (arquitectura.md)](arquitectura.md)**; this English version is a translation.
+
+---
+
+## Analytics and job-title–skill graph layer
+
+Analytics reads the private `pxtron/vacantes-colombia` `data/*.parquet` shards.
+`src/analisis/datos_hf.py` uses the Hugging Face cache and records the resolved
+commit; it neither invokes collectors nor changes stores. DuckDB can query the
+cached parquet files directly.
+
+`src/procesamiento/habilidades.py` loads the official Spanish ESCO CSV and
+detects explicit mentions. `src/grafos/construir_grafo.py` emits nodes, edges,
+audit data, and a provenance manifest. `metricas_grafo.py` provides TF-IDF
+cosine similarity, communities, and exploratory proximity signals.
+
+```mermaid
+flowchart LR
+    hf["Private HF<br/>data/*.parquet"] --> access["datos_hf.py<br/>read + revision"]
+    access --> dashboard["dashboard_metricas.ipynb"]
+    access --> extractor["habilidades.py"]
+    esco["Spanish ESCO CSV"] --> extractor
+    extractor --> builder["construir_grafo.py"]
+    builder --> artifacts["nodes/edges/audit/manifest"]
+    artifacts --> network["grafo_habilidades_ocupaciones.ipynb"]
+```
+
+The current volume does not justify Spark. It remains an option for millions
+of texts or distributed NLP/embedding inference.

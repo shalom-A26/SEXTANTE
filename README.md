@@ -39,7 +39,11 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 - **Dataset unificado**: **246.782 vacantes** en DuckDB local (`data/duckdb/sextante.duckdb`, tabla `vacantes`) y dataset Hugging Face privado **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)** (5 shards parquet).
 - **Captura automática en la nube**: workflow de **GitHub Actions** (repo privado) cada 6 horas. **Hugging Face es la memoria persistente** del pipeline (`store/`); el cron local está desactivado y el corpus se acumula sin purgas.
 - **EDA de validación**: `notebooks/eda_validacion.ipynb` (verifica esquema y cobertura de campos).
-- Pendiente: módulos `procesamiento/`, `analisis/` y `grafos/` (NLP/habilidades ESCO, clustering salarial, grafos de ocupaciones; posible Apache Spark según volumen).
+- Siguientes fases: evaluación de la extracción ESCO, NLP contextual,
+  homologación ocupacional y modelos salariales.
+- **Avance analítico inicial**: dashboard laboral y grafo bipartito
+  cargo–habilidad basado en ESCO, leyendo los shards privados de Hugging Face
+  sin modificar la extracción.
 
 ## Arquitectura en una vista (C4 · Nivel 1 — Contexto)
 
@@ -250,7 +254,29 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/
 
 # 3. Validar el corpus (ejecutar el notebook)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
+
+# 4. Dashboard analítico (requiere acceso al dataset privado de HF)
+hf auth login  # alternativa: exportar HF_TOKEN fuera del repositorio
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/dashboard_metricas.ipynb
+
+# 5. Grafo (requiere ESCO CSV en data/referencias/esco/)
+.venv/bin/python -m src.grafos.construir_grafo --repo pxtron/vacantes-colombia --esco-dir data/referencias/esco
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/grafo_habilidades_ocupaciones.ipynb
 ```
+
+## Analítica y grafo de habilidades
+
+`src/analisis/datos_hf.py` descarga solamente `data/*.parquet` de
+`pxtron/vacantes-colombia`, usa la caché oficial y registra la revisión resuelta.
+El dashboard calcula cobertura, concentración, demanda, experiencia,
+temporalidad y salarios robustos. Los nulos de modalidad siguen siendo
+desconocidos y los salarios SPE se interpretan como rangos publicados.
+
+La extracción inicial usa etiquetas oficiales ESCO en español y reconoce
+menciones explícitas. Las similitudes y rutas del grafo son señales
+exploratorias de coocurrencia, no recomendaciones individuales. DuckDB,
+pandas y matrices dispersas bastan para el volumen actual; Spark se reserva
+para millones de textos, embeddings o NLP distribuido.
 
 Cada corrida **añade** filas nuevas y estampa `fecha_captura`: `vacantes.csv` deduplica por `url`; el parquet del SPE deduplica por `id_vacante` (`CODIGO_VACANTE`).
 

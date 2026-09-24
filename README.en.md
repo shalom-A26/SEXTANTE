@@ -39,7 +39,10 @@ Develop an analytics and data-mining solution that helps understand the needs of
 - **Unified dataset**: **246,782 vacancies** in local DuckDB (`data/duckdb/sextante.duckdb`, table `vacantes`) and a private Hugging Face dataset **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)** (5 parquet shards).
 - **Automatic cloud capture**: **GitHub Actions** workflow (private repo) every 6 hours. **Hugging Face is the pipeline's persistent memory** (`store/`); the local cron is disabled and the corpus accumulates with no purges.
 - **Validation EDA**: `notebooks/eda_validacion.ipynb` (checks schema and field coverage).
-- Next: `procesamiento/`, `analisis/` and `grafos/` modules (NLP/ESCO skills, salary clustering, occupation graphs; possible Apache Spark depending on volume).
+- Next phases: ESCO extraction evaluation, contextual NLP, validated
+  occupational mapping, and salary models.
+- **Initial analytics milestone**: labour dashboard and ESCO-based job-title–skill
+  graph reading the private Hugging Face shards without changing extraction.
 
 ## Architecture at a glance (C4 · Level 1 — Context)
 
@@ -250,7 +253,29 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/
 
 # 3. Validate the corpus (run the notebook)
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/eda_validacion.ipynb
+
+# 4. Analytics dashboard (requires access to the private HF dataset)
+hf auth login  # alternatively export HF_TOKEN outside the repository
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/dashboard_metricas.ipynb
+
+# 5. Graph (also requires the ESCO CSV package under data/referencias/esco/)
+.venv/bin/python -m src.grafos.construir_grafo --repo pxtron/vacantes-colombia --esco-dir data/referencias/esco
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/grafo_habilidades_ocupaciones.ipynb
 ```
+
+## Analytics and skills graph
+
+`src/analisis/datos_hf.py` downloads only `data/*.parquet` from
+`pxtron/vacantes-colombia`, uses the official cache, and records the resolved
+revision. The dashboard covers quality, concentration, demand, experience,
+time trends, and robust salary summaries. Missing modality remains unknown and
+SPE salaries are treated as published ranges.
+
+The initial extractor uses official Spanish ESCO labels and only recognises
+explicit mentions. Graph similarities and routes are exploratory co-occurrence
+signals, not individual recommendations. DuckDB, pandas, and sparse matrices
+are sufficient at the current scale; Spark is deferred to millions of texts,
+embeddings, or distributed NLP.
 
 Each run **appends** new rows and stamps `fecha_captura`: `vacantes.csv` deduplicates by `url`; the SPE parquet deduplicates by `id_vacante` (`CODIGO_VACANTE`).
 
