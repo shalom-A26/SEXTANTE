@@ -8,12 +8,13 @@ __pycache__/
 # OS
 .DS_Store
 
+# Secrets (token de Hugging Face)
+.env
+
 # Datos
 data/snapshots/
 data/raw/spe/
 data/emitido/
-data/duckdb/
-*.duckdb
 
 # Taxonomías externas y artefactos analíticos reproducibles
 data/referencias/esco/*
