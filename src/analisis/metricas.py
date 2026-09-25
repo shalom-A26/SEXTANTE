@@ -16,8 +16,26 @@ CAMPOS_CALIDAD = [
 ]
 
 
+def reparar_mojibake(texto: object) -> str:
+    """Corrige textos UTF-8 leídos como Latin-1 (p. ej. ``confecciÃ³n``).
+
+    Varios orígenes publican acentos doblemente codificados; se repara solo
+    cuando aparecen los marcadores tÃ­picos (``Ã``/``Â``) y siempre de forma
+    segura: si la reconstrucción falla, se devuelve el texto original.
+    """
+    if not isinstance(texto, str):
+        return texto
+    if "Ã" not in texto and "Â" not in texto:
+        return texto
+    try:
+        return texto.encode("latin1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texto
+
+
 def _texto_limpio(serie: pd.Series) -> pd.Series:
     s = serie.astype("string").str.strip()
+    s = s.map(reparar_mojibake)
     return s.mask(s.str.lower().isin({"", "nan", "none", "null", "n/a"}))
 
 
