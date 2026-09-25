@@ -16,8 +16,6 @@ data/snapshots/
 data/raw/spe/
 data/emitido/
 
-# Taxonomías externas y artefactos analíticos reproducibles
-data/referencias/esco/*
-!data/referencias/esco/README.md
+# Artefactos analíticos reproducibles
 data/procesados/grafos/*
 !data/procesados/grafos/README.md
