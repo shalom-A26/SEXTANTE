@@ -9,7 +9,7 @@ Tools: `python-jobspy` 1.1.13, `requests` 2.x. Low-volume tests.
 
 | Source | Viable? | Detail | Pilot priority |
 | --- | --- | --- | --- |
-| **SPE – official export** (`buscadordeempleo.gov.co`) | ✔ Yes | Full vacancy CSV export via API `/backbue/v1` (official async job). ~285k rows/capture; canonical store accumulated to 246.5k unique; ~100% coverage of key fields. | 1 |
+| **SPE – official export** (`buscadordeempleo.gov.co`) | ✔ Yes | Full vacancy CSV export via API `/backbue/v1` (official async job). ~285k rows/capture; canonical store accumulated to 319.8k unique (2026-10-04); ~100% coverage of key fields. | 1 |
 | **LinkedIn** (via JobSpy) | ✔ Yes | Listing + full description. 10/10 in test. | 2 |
 | **El Empleo** (`elempleo.com.co`) | ✔ Yes | Public HTML listing + JSON-LD `JobPosting` detail. 20 unique offers per SEO page. | 3 |
 | **Computrabajo** | ✘ No | `robots.txt` and page respond 403. Aggressive blocking (Cloudflare). Not viable without evasion. | — |

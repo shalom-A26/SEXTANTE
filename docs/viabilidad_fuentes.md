@@ -7,7 +7,7 @@ Herramientas: `python-jobspy` 1.1.13, `requests` 2.x. Volúmenes bajos de prueba
 
 | Fuente | ¿Viable? | Detalle | Prioridad piloto |
 | --- | --- | --- | --- |
-| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Sí | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono oficial). ~285k filas/captura; store canónico acumulado a 246,5k únicas; cobertura ~100% de campos clave. | 1 |
+| **SPE – export oficial** (`buscadordeempleo.gov.co`) | ✔ Sí | Export CSV total de vacantes vía API `/backbue/v1` (job asíncrono oficial). ~285k filas/captura; store canónico acumulado a 319,8k únicas (2026-10-04); cobertura ~100% de campos clave. | 1 |
 | **LinkedIn** (vía JobSpy) | ✔ Sí | Listado + descripción completa. 10/10 en prueba. | 2 |
 | **El Empleo** (`elempleo.com.co`) | ✔ Sí | Listado HTML público + detalle en JSON-LD `JobPosting`. 20 ofertas únicas por página SEO. | 3 |
 | **Computrabajo** | ✘ No | `robots.txt` y página responden 403. Bloqueo agresivo (Cloudflare). No viable sin evasión. | — |

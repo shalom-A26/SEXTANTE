@@ -1,7 +1,8 @@
 """Construcción reproducible del grafo bipartito cargo–término.
 
 Usa el vocabulario endógeno de :mod:`src.procesamiento.habilidades` (sin
-taxonomía externa) y los shards publicados en Hugging Face. Dos pasadas:
+taxonomía externa) y los archivos semanales publicados en Hugging Face. Dos
+pasadas:
 
 1. muestrea descripciones para estimar el vocabulario y cuenta el soporte de
    cada ocupación;

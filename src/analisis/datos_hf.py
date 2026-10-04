@@ -8,7 +8,7 @@ proyecto: no hay base local que la sustituya.
 Los archivos son semanales (`data/semana-*.parquet`) y cada vacante vive en el
 de la semana en que la vimos por primera vez, con las filas congeladas. El
 dedupe por `id_vacante` queda como red de seguridad (y por compatibilidad con
-datasets previos, que podían traer filas repetidas entre shards).
+datasets previos, que podían traer filas repetidas entre archivos).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 REPO_HF_DEFECTO = "pxtron/vacantes-colombia"
-PATRON_SHARDS = "data/*.parquet"
+PATRON_ARCHIVOS = "data/*.parquet"
 CLAVE_DEDUPE = "id_vacante"
 
 
@@ -76,7 +76,7 @@ def descargar_dataset_hf(
     revision: str = "main",
     token: str | None = None,
 ) -> tuple[list[Path], str]:
-    """Descarga/carga desde caché los shards publicados de Hugging Face."""
+    """Descarga/carga desde caché los archivos semanales publicados en Hugging Face."""
     cargar_entorno_local()
     try:
         from huggingface_hub import snapshot_download
@@ -89,7 +89,7 @@ def descargar_dataset_hf(
                 repo_id=repo_id,
                 repo_type="dataset",
                 revision=revision,
-                allow_patterns=[PATRON_SHARDS],
+                allow_patterns=[PATRON_ARCHIVOS],
                 token=token or os.environ.get("HF_TOKEN"),
             )
         )
@@ -102,7 +102,7 @@ def descargar_dataset_hf(
 
     archivos = sorted((snapshot / "data").glob("*.parquet"))
     if not archivos:
-        raise FileNotFoundError(f"El snapshot de {repo_id}@{revision} no contiene {PATRON_SHARDS}")
+        raise FileNotFoundError(f"El snapshot de {repo_id}@{revision} no contiene {PATRON_ARCHIVOS}")
     revision_resuelta = snapshot.name if snapshot.parent.name == "snapshots" else revision
     return archivos, revision_resuelta
 
@@ -113,7 +113,7 @@ def cargar_vacantes_hf(
     columnas: list[str] | None = None,
     token: str | None = None,
 ) -> tuple[pd.DataFrame, ProcedenciaDatos]:
-    """Carga todos los shards HF (deduplicados) junto con su procedencia."""
+    """Carga todos los archivos semanales de HF (deduplicados) junto con su procedencia."""
     archivos, revision_resuelta = descargar_dataset_hf(repo_id, revision, token)
     partes = [pd.read_parquet(ruta, columns=columnas) for ruta in archivos]
     brutas = sum(len(p) for p in partes)
@@ -138,9 +138,9 @@ def iterar_vacantes_hf(
     columnas: list[str] | None = None,
     token: str | None = None,
 ):
-    """Entrega un DataFrame por shard (deduplicado contra los ya vistos).
+    """Entrega un DataFrame por archivo semanal (deduplicado contra los ya vistos).
 
-    Pensado para procesamiento textual acotado en RAM sobre los shards que el
+    Pensado para procesamiento textual acotado en RAM sobre los archivos que el
     pipeline publica periódicamente.
     """
     archivos, revision_resuelta = descargar_dataset_hf(repo_id, revision, token)
