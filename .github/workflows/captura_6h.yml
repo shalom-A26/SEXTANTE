@@ -32,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Pull accumulated corpus from Hugging Face
+      - name: Rebuild stores from Hugging Face
         run: python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
 
       - name: Capture SPE (official export)
@@ -41,7 +41,7 @@ jobs:
       - name: Capture curated (LinkedIn + El Empleo)
         run: python -m src.extraccion.corpus --fuentes linkedin elempleo
 
-      - name: Emit unified dataset and upload to Hugging Face
+      - name: Emit weekly dataset and upload to Hugging Face
         run: python -m src.extraccion.emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
 
       - name: Publish run summary
@@ -92,12 +92,12 @@ jobs:
                   if nuevas > 0:
                       crecimiento = f"**+{nuevas:,}** nuevas"
                   elif nuevas == 0:
-                      crecimiento = "⚠️ **sin vacantes nuevas** (la captura no aportó nada)"
+                      crecimiento = "⚠️ **sin vacantes nuevas**: la captura no aportó nada"
                   else:
                       crecimiento = (
                           f"⚠️ **{nuevas:,} menos** que las publicadas: el corpus se encogió"
                       )
-                  lineas.append(f"- Publicado: **{estado.get('filas', 0):,}** vacantes ({crecimiento})")
+                  lineas.append(f"- Publicado: **{estado.get('filas', 0):,}** vacantes — {crecimiento}")
               lineas.append(
                   f"- Semana en curso: `{estado.get('semana_en_curso')}` "
                   f"({estado.get('filas_semana_en_curso', 0):,} filas; solo este archivo se reescribe)"

@@ -10,7 +10,8 @@ The real requirements of a position cannot always be inferred from the vacancy t
 
 SEXTANTE builds a processing pipeline that gathers job vacancies published in Colombia and turns their descriptions into structured data to:
 
-- Identify demanded skills (reference to the open ESCO taxonomy).
+- Identify demanded skills (extracted from the descriptions themselves, with an
+  occupational signal).
 - Analyse salary patterns.
 - Group similar occupational profiles.
 - Detect patterns or anomalies in labour demand.
@@ -33,16 +34,19 @@ Develop an analytics and data-mining solution that helps understand the needs of
 
 ## Current status
 
+*Figures as of 2026-10-04; the corpus grows by ~35 k vacancies per week.*
+
 - **Working extraction pipeline** (`src/extraccion/`): collects vacancies from **SPE** (official export), **El Empleo** and **LinkedIn** (via JobSpy), normalised to the **17-column canonical schema**.
-- **Big SPE corpus**: `vacantes_spe.parquet` (~246.5k unique vacancies accumulated per `CODIGO_VACANTE`, 2021→today, ~100% coverage of description, education level, department, salary range, contract and experience).
-- **Curated corpus**: `data/raw/vacantes.csv` (231 vacancies from El Empleo + LinkedIn, deduplicated by `url`).
-- **Unified dataset**: **246,782 vacancies** in local DuckDB (`data/duckdb/sextante.duckdb`, table `vacantes`) and a private Hugging Face dataset **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)** (5 parquet shards).
-- **Automatic cloud capture**: **GitHub Actions** workflow (private repo) every 6 hours. **Hugging Face is the pipeline's persistent memory** (`store/`); the local cron is disabled and the corpus accumulates with no purges.
+- **Big SPE corpus**: `vacantes_spe.parquet` (319,765 unique vacancies accumulated per `CODIGO_VACANTE`, 2021→today, ~100% coverage of description, education level, department, salary range, contract and experience).
+- **Curated corpus**: `data/raw/vacantes.csv` (2,548 vacancies from El Empleo + LinkedIn, deduplicated by `url`).
+- **Published dataset**: **322,313 vacancies** in the private Hugging Face dataset **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)**, as **weekly** parquet files under `data/` (a vacancy lives in the file for the week it was first seen). There is no local database: the analytics layer reads from HF.
+- **Append-only stores**: a vacancy already seen is **never rewritten**; `fecha_captura` is pinned to the first observation. That makes closed weeks immutable, so publishing costs ~50 MB per run instead of ~1.5 GB — and it makes vacancy lifetime measurable.
+- **Automatic cloud capture**: **GitHub Actions** workflow (private repo) every 6 hours. **Hugging Face is the pipeline's persistent memory**; the local cron is disabled and the corpus accumulates with no purges.
+  - *Actual cadence*: the nominal cron is `0 5,11,17,23 UTC` (00/06/12/18 Colombia), but GitHub's scheduler does not honour it to the minute. Measured across 20 runs in September–October 2026: deviations range from −3.4 h to +2.6 h, with one ~8.8 h window with no run at all. The average stays at ~4 captures per day, but not at the documented hours.
+- **Failures are visible**: if a source fails, the run ends red and the Actions Summary flags "no new vacancies" or "the corpus shrank".
 - **Validation EDA**: `notebooks/eda_validacion.ipynb` (checks schema and field coverage).
-- Next phases: ESCO extraction evaluation, contextual NLP, validated
-  occupational mapping, and salary models.
-- **Initial analytics milestone**: labour dashboard and ESCO-based job-title–skill
-  graph reading the private Hugging Face shards without changing extraction.
+- Next phases: contextual NLP, validated occupational mapping, and salary models.
+- **Initial analytics milestone**: labour dashboard and bipartite job-title–term graph built with **endogenous vocabulary** (n-grams extracted from the descriptions plus an occupational signal), reading the private Hugging Face files without changing extraction.
 
 ## Architecture at a glance (C4 · Level 1 — Context)
 
@@ -75,10 +79,10 @@ Full C4 model (context, containers, components, deployment), capture sequences a
 flowchart TB
     subgraph GH["GitHub Actions (ephemeral runner)"]
         wf["Workflow captura_6h.yml<br/>cron '0 5,11,17,23 * * *' UTC = 00/06/12/18 Colombia"]
-        pull["sync_hf --pull<br/>restores accumulated corpus from HF"]
+        pull["sync_hf --pull<br/>rebuilds the stores from data/*.parquet"]
         sp["corpus --fuentes spe<br/>official export ~285k rows"]
         cu["corpus --fuentes linkedin elempleo<br/>append + dedupe by url"]
-        em["emitir_dataset --hf-upload<br/>17-column shards + store/"]
+        em["emitir_dataset --hf-upload<br/>weekly files + card"]
     end
 
     hub["HF Hub (persistent memory)<br/>pxtron/vacantes-colombia"]
@@ -87,13 +91,13 @@ flowchart TB
     fli["LinkedIn"]
 
     wf --> pull
-    pull -->|"store/vacantes_spe.parquet · store/vacantes_curado.csv"| hub
+    pull -->|"downloads data/semana-*.parquet"| hub
     sp -->|"downloads CSV"| fsp
     cu --> fee
     cu --> fli
     sp --> em
     cu --> em
-    em -->|"rewrites shards + store/ on each run"| hub
+    em -->|"uploads only the current week's file"| hub
 
     classDef nube fill:#1168bd,color:#fff,stroke:#0b4884;
     classDef ext fill:#999999,color:#fff,stroke:#6b6b6b;
@@ -101,7 +105,9 @@ flowchart TB
     class hub,fsp,fee,fli ext;
 ```
 
-The runner is discarded when the job finishes; **the whole accumulated corpus lives in HF**. Each run downloads the accumulation (`sync_hf`), appends newly seen vacancies and rewrites it to HF (same paths, same dataset). Real growth comes from vacancies not yet in the store, deduplicated by `CODIGO_VACANTE` (SPE) or `url` (curated); no purges.
+The runner is discarded when the job finishes; **the whole accumulated corpus lives in HF**. Each run rebuilds the local stores from the published files, appends newly seen vacancies and publishes the dataset again.
+
+Real growth comes from vacancies not yet in the store, deduplicated by `CODIGO_VACANTE` (SPE) or `url` (curated); no purges. Because the stores are append-only, an already-seen vacancy is never rewritten, so files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file (~50 MB instead of ~1.5 GB).
 
 ## Periodic capture (sequence)
 
@@ -118,19 +124,22 @@ sequenceDiagram
 
     Sched->>wf: trigger every 6 h (UTC cron)
     wf->>sy: --pull (HF_TOKEN = repo secret)
-    sy->>hub: download store/ (if it exists)
-    hub-->>wf: store restored to data/raw/
+    sy->>hub: list data/semana-*.parquet
+    hub-->>sy: published files
+    sy->>sy: rebuild stores by `almacen`<br/>+ data/raw/_publicado.json
     wf->>cp: --fuentes spe
     cp->>sp: descargar_export_csv()
     sp->>sp: async job → POLL status → DOWNLOAD CSV
-    cp->>cp: guardar_parquet()<br/>(dedupe by CODIGO_VACANTE)
+    cp->>cp: guardar_parquet()<br/>(append-only by CODIGO_VACANTE)
     wf->>cp: --fuentes linkedin elempleo
     cp->>cp: guardar_lotes()<br/>(append + dedupe by url)
     wf->>em: emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
-    em->>em: consolidar() → parquet shards + store/
-    em->>hub: rewrites shards + store/ (same dataset)
-    em-->>wf: run Summary
+    em->>em: consolidar() → group by capture week
+    em->>hub: uploads data/semana-*.parquet (skipping present ones)
+    em-->>wf: Summary with real growth (new / unchanged / shrank)
 ```
+
+> If a source fails, `corpus.py` exits with code 1: the run shows up red in Actions instead of republishing the same corpus and looking healthy.
 
 ## Methodology
 
@@ -178,7 +187,7 @@ This is the **single output contract** for all collectors (defined in `src/extra
 | `modalidad` | `Teletrabajo` if the source says so (SPE `TELETRABAJO=1`), or other value. |
 | `nivel_educativo` | Required education level (native in SPE, ~100%). |
 | `experiencia_texto` | Required experience text (SPE: "N months"). |
-| `fecha_captura` | Capture timestamp `%Y-%m-%d %H:%M:%S`. |
+| `fecha_captura` | Capture timestamp `%Y-%m-%d %H:%M:%S`. Because the stores are append-only, it is the **first** time we saw the vacancy (not the last). |
 
 Full data model (ER and dictionary) in `docs/architecture.en.md`.
 
@@ -199,24 +208,23 @@ SEXTANTE/
 │   │   └── spe/              # vacantes_spe.parquet (canonical big-corpus seed)
 │   ├── procesados/           # clean/enriched datasets (future use)
 │   ├── snapshots/            # timestamped cuts of manual captures
-│   ├── emitido/              # Hugging Face-ready dataset (parquet + card)
-│   └── duckdb/               # sextante.duckdb (vacantes table, local)
+│   └── emitido/              # weekly Hugging Face-ready dataset (parquet + card)
 ├── notebooks/
 │   └── eda_validacion.ipynb
 ├── src/
 │   ├── extraccion/           # Collection and emission pipeline
 │   │   ├── esquema.py        #   17-column contract
-│   │   ├── base.py           #   ethical HTTP, save + dedupe + snapshots
+│   │   ├── base.py           #   ethical HTTP, append-only save + snapshots
 │   │   ├── corpus.py         #   orchestrator (python -m ...)
-│   │   ├── sync_hf.py        #   restores accumulated corpus from HF (--pull)
-│   │   ├── emitir_dataset.py #   local DuckDB + HF dataset (shards + store/)
+│   │   ├── sync_hf.py        #   rebuilds the stores from HF (--pull)
+│   │   ├── emitir_dataset.py #   HF dataset by capture week
 │   │   └── portales/
 │   │       ├── spe.py               #   SPE (official export CSV → canonical parquet)
 │   │       ├── elempleo.py          #   El Empleo (HTML + JSON-LD)
 │   │       └── linkedin_jobspy.py   #   LinkedIn via JobSpy
 │   ├── procesamiento/        # Cleaning, normalisation, NLP, embeddings (future)
 │   ├── analisis/             # EDA, clustering, topics, models (future)
-│   └── grafos/               # Skills–occupations graph (future)
+│   └── grafos/               # Skills–occupations graph (endogenous vocabulary)
 └── docs/
     ├── integrantes.txt
     ├── viabilidad_fuentes.md / .en.md   # Source viability study (es/en)
@@ -239,16 +247,14 @@ uv pip install -r requirements.txt
 .venv/bin/python -m src.extraccion.corpus --fuentes elempleo
 .venv/bin/python -m src.extraccion.corpus --fuentes linkedin --linkedin-por-busqueda 25
 
-# 2c. Emit the unified dataset (local DuckDB + HF directory)
+# 2c. Emit the weekly dataset (HF directory; without --hf-upload nothing is published)
 .venv/bin/python -m src.extraccion.emitir_dataset
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
 
 # 2d. Restore the accumulated corpus from Hugging Face (persistent memory)
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
-# 2e. Seed HF with the local stores (first run only, or after recreating the dataset):
-HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/vacantes-colombia
 
-# 2f. Manual local capture (development); automatic capture runs in GitHub Actions
+# 2e. Manual local capture (development); automatic capture runs in GitHub Actions
 ./scripts/capturar_6h.sh
 
 # 3. Validate the corpus (run the notebook)
@@ -258,37 +264,55 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --push --repo pxtron/
 hf auth login  # alternatively export HF_TOKEN outside the repository
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/dashboard_metricas.ipynb
 
-# 5. Graph (also requires the ESCO CSV package under data/referencias/esco/)
-.venv/bin/python -m src.grafos.construir_grafo --repo pxtron/vacantes-colombia --esco-dir data/referencias/esco
+# 5. Graph (endogenous vocabulary; no external dependencies)
+.venv/bin/python -m src.grafos.construir_grafo --repo pxtron/vacantes-colombia
 .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/grafo_habilidades_ocupaciones.ipynb
+```
+
+Tests:
+
+```bash
+.venv/bin/python -m unittest discover -s tests
 ```
 
 ## Analytics and skills graph
 
 `src/analisis/datos_hf.py` downloads only `data/*.parquet` from
 `pxtron/vacantes-colombia`, uses the official cache, and records the resolved
-revision. The dashboard covers quality, concentration, demand, experience,
-time trends, and robust salary summaries. Missing modality remains unknown and
-SPE salaries are treated as published ranges.
+revision. Because rows are frozen and each vacancy lives in a single file, the
+load deduplicates by `id_vacante` as a safety net and normally drops nothing.
+The dashboard covers quality, concentration, demand, experience, time trends,
+and robust salary summaries. Missing modality remains unknown and SPE salaries
+are treated as published ranges.
 
-The initial extractor uses official Spanish ESCO labels and only recognises
-explicit mentions. Graph similarities and routes are exploratory co-occurrence
-signals, not individual recommendations. DuckDB, pandas, and sparse matrices
-are sufficient at the current scale; Spark is deferred to millions of texts,
-embeddings, or distributed NLP.
+The graph uses **endogenous vocabulary**: instead of projecting the descriptions
+onto an external taxonomy, it extracts n-grams from the descriptions themselves
+and filters them by an occupational signal and frequency
+(`src/procesamiento/habilidades.py`). The resulting job-title–term network is
+bipartite and fully connected, which allows studying communities and transition
+routes. Similarities and routes are exploratory co-occurrence signals, not
+individual recommendations.
 
-Each run **appends** new rows and stamps `fecha_captura`: `vacantes.csv` deduplicates by `url`; the SPE parquet deduplicates by `id_vacante` (`CODIGO_VACANTE`).
+Because the stores are append-only, `fecha_captura` is the first observation:
+together with `fecha_publicacion` it makes **vacancy lifetime** measurable.
+That measurement was impossible while the corpus kept the last observed version.
+
+Pandas and sparse matrices are sufficient at the current scale; Spark is
+deferred to millions of texts, embeddings, or distributed NLP.
+
+Each run **appends** new rows and stamps `fecha_captura`: `vacantes.csv`
+deduplicates by `url`; the SPE parquet deduplicates by `id_vacante`
+(`CODIGO_VACANTE`). In both cases a vacancy already present is never rewritten.
 
 ## Operations dashboard (where to see the data)
 
 | Artefact | Path / resource |
 | --- | --- |
 | Log of each automatic capture | **Actions** tab of the repo (run Summary) |
-| Accumulated corpus (HF memory) | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) — `store/` folder |
-| Published unified dataset | [huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data](https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data) |
+| Published dataset (memory and product) | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) — weekly files under [`data/`](https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data) |
+| Counts from the last run | `data/emitido/vacantes-colombia/estado.json` (local) |
 | Local curated corpus (seed/manual) | `data/raw/vacantes.csv` |
 | Local canonical big corpus (seed/manual) | `data/raw/spe/vacantes_spe.parquet` |
-| Local unified database | `data/duckdb/sextante.duckdb` (`vacantes` table) |
 | Local publish-ready dataset | `data/emitido/vacantes-colombia/` |
 
 ## Data ethics (cross-cutting axis)

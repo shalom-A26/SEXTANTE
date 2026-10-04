@@ -25,11 +25,13 @@ SEXTANTE is an ETL/ELT pipeline for Colombian job vacancies:
 
 1. **Extracts** from three sources: the official SPE export (massive, ~285k rows/capture), El Empleo (HTML + JSON-LD) and LinkedIn (JobSpy).
 2. **Normalises** everything to the **17-column canonical schema** (`src/extraccion/esquema.py`, `normalizar()` / `validar()`).
-3. **Stores** into two stores: canonical big corpus in parquet (SPE) and curated corpus in CSV (El Empleo + LinkedIn).
-4. **Persistent memory = Hugging Face**: `sync_hf.py` restores the accumulated corpus (`store/`) before each run; `emitir_dataset.py` rewrites it into HF together with the unified dataset (17-column shards).
+3. **Stores** into two **append-only** stores: canonical big corpus in parquet (SPE) and curated corpus in CSV (El Empleo + LinkedIn). A vacancy already seen is never rewritten; `fecha_captura` stays pinned to the first observation.
+4. **Persistent memory = Hugging Face**: `sync_hf.py` rebuilds the local stores from the published files (`data/semana-*.parquet`) before each run; `emitir_dataset.py` publishes them again.
 5. **Capture is automatic every 6 hours** on **GitHub Actions** (`.github/workflows/captura_6h.yml`); the local cron is disabled and `scripts/capturar_6h.sh` remains for manual development use.
 
-Current state: **246,782 vacancies** in local DuckDB (246,551 SPE + 231 curated), private HF dataset `pxtron/vacantes-colombia` (shards + `store/`), active workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia time).
+Current state: **322,313 vacancies** (319,765 SPE + 2,548 curated) in the private HF dataset `pxtron/vacantes-colombia`, published as weekly parquet files; active workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia time). There is no local database: the analytics layer reads from HF.
+
+**Why weekly.** The previous layout published the corpus twice (`store/` folder plus `train-*-of-*` shards) and never deleted the shards of previous generations: 650 MB of content with 283 MB dead (44 %) and ~1.32 GB of upload per day. With the weekly layout, each vacancy lives in the file for the week it was first seen; because rows are frozen, files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file: **~50 MB instead of ~1.5 GB**. The migration executed on 2026-10-04 left the repo at **166 MB of content** (650 MB before) with the same 322,313 vacancies. `used_storage` (~19 GB, mostly history HF does not release) does not shrink when files are deleted: what stops is the growth.
 
 ---
 
@@ -52,7 +54,7 @@ flowchart LR
     s -->|"official CSV export (3 requests/capture)"| spe
     s -->|"public listings + JSON-LD detail"| ee
     s -->|"term searches"| li
-    s -->|"rewrites accumulated corpus (store/) + unified dataset"| hf
+    s -->|"weekly files data/semana-*.parquet (append-only)"| hf
     s -.->|"only public offer information"| u
 
     classDef sist fill:#1168bd,color:#fff,stroke:#0b4884;
@@ -74,26 +76,27 @@ Decomposition of the system into executable and storage containers.
 flowchart TB
     subgraph RUNNER["GitHub Actions · Ubuntu runner (ephemeral, per run)"]
         wf["Workflow captura_6h.yml"]
-        sync["sync_hf.py<br/>--pull/restore + uploads store/"]
+        sync["sync_hf.py<br/>--pull rebuilds the stores"]
         corpus["corpus.py<br/>collection orchestrator"]
-        emit["emitir_dataset.py<br/>HF + DuckDB emission"]
+        emit["emitir_dataset.py<br/>weekly HF emission"]
 
         subgraph EPHEMERAL["data/ on the runner (discarded when done)"]
             storespe[("parquet<br/>data/raw/spe/vacantes_spe.parquet")]
             storecu[("CSV<br/>data/raw/vacantes.csv")]
-            emitd[("dataset dir<br/>data/emitido/vacantes-colombia/")]
+            emitd[("dataset dir<br/>data/emitido/vacantes-colombia/<br/>data/semana-*.parquet")]
         end
     end
 
     subgraph LOCAL["UTB machine (manual development)"]
         shdev["scripts/capturar_6h.sh"]
+        edacli["Local CLI<br/>.venv + notebooks"]
         notebook["Jupyter · eda_validacion.ipynb"]
     end
 
     spe["SPE /backbue/v1"]
     ee["El Empleo"]
     li["LinkedIn (JobSpy)"]
-    hub["HF Hub (persistent)<br/>store/ + data/ shards"]
+    hub["HF Hub (persistent)<br/>data/semana-*.parquet"]
 
     wf --> sync
     sync --> hub
@@ -107,11 +110,14 @@ flowchart TB
     emit --> storespe
     emit --> storecu
     emit --> emitd
-    emitd -->|"--hf-upload (HF_TOKEN) · rewrite"| hub
+    emitd -->|"--hf-upload (HF_TOKEN) · current week only"| hub
     shdev -.->|"same logic locally"| corpus
     notebook --> hub
     notebook --> storespe
     notebook --> storecu
+    edacli -.->|"same logic locally"| sync
+    edacli -.->|"same logic locally"| corpus
+    edacli -.->|"same logic locally"| emit
 
     classDef cont fill:#1168bd,color:#fff,stroke:#0b4884;
     classDef almacen fill:#d9ead3,stroke:#6aa84f;
@@ -121,10 +127,10 @@ flowchart TB
     class spe,ee,li,hub ext;
 ```
 
-- **corpus.py**: orchestrates sources, applies `normalizar()`, saves with dedupe and, in manual mode, snapshots.
-- **sync_hf.py**: the gateway to persistent memory — restores `store/vacantes_spe.parquet` and `store/vacantes_curado.csv` from HF before capturing.
-- **emitir_dataset.py**: consolidates both stores, writes DuckDB (local, analytics) and generates the HF directory that is later uploaded with `--hf-upload` (17-column shards **+** `store/`).
-- **DuckDB**: local analytics database; `vacantes` table with 17 canonical columns + `almacen` (`spe`/`curado`).
+- **corpus.py**: orchestrates sources, applies `normalizar()`, saves with append-only dedupe and, in manual mode, snapshots. Exits with code 1 if a requested source fails.
+- **sync_hf.py**: the gateway to persistent memory — rebuilds `data/raw/spe/vacantes_spe.parquet` and `data/raw/vacantes.csv` from the published `data/semana-*.parquet` (with a fallback to the `store/` layout for datasets not yet migrated) and leaves `data/raw/_publicado.json` with the previous run's counts.
+- **emitir_dataset.py**: consolidates both stores, groups them by `fecha_captura` week and generates the HF directory (`data/semana-*.parquet` + dataset card + `estado.json`), which `--hf-upload` publishes skipping what is already in the repo.
+- **Hugging Face as the only analytics storage**: there is no local database. `src/analisis/datos_hf.py` reads the parquet files read-only and records the resolved revision.
 - **Jupyter**: EDA validating schema and coverage.
 
 ### Level 3 · Components
@@ -135,10 +141,10 @@ Internal components of the extraction/emission container.
 flowchart LR
     subgraph SRC["src/extraccion/"]
         schema["esquema.py<br/>17-column contract"]
-        base["base.py<br/>ethical HTTP + save/dedupe/snapshots"]
+        base["base.py<br/>ethical HTTP + append-only save/snapshots"]
         corpus["corpus.py<br/>CLI orchestrator"]
-        sync["sync_hf.py<br/>restores store/ from HF"]
-        emitir["emitir_dataset.py<br/>DuckDB + HF (shards + store/)"]
+        sync["sync_hf.py<br/>rebuilds stores from HF"]
+        emitir["emitir_dataset.py<br/>HF dataset by week"]
 
         subgraph PORTALS["portales/"]
             spe["spe.py<br/>official export → parquet"]
@@ -167,13 +173,13 @@ flowchart LR
 
 Key component details:
 
-- **spe.py** — drives the massive export: `descargar_export_csv()` (async job), `_parsear_salario()` (bucket → `salario_min`/`salario_max`), `exportar_a_canonico()` (`id_vacante = spe-<CODIGO_VACANTE>`), `guardar_parquet()` (dedupe by `id_vacante`). Includes retry for the portal's intermittent TLS (`verify=False` only after SSL failure, with a warning).
+- **spe.py** — drives the massive export: `descargar_export_csv()` (async job), `_parsear_salario()` (bucket → `salario_min`/`salario_max`), `exportar_a_canonico()` (`id_vacante = spe-<CODIGO_VACANTE>`), `guardar_parquet()` (append-only by `id_vacante`, `keep="first"`, returns how many rows are new). Includes retry for the portal's intermittent TLS (`verify=False` only after SSL failure, with a warning).
 - **elempleo.py** — public SEO listings + JSON-LD `JobPosting` detail (`baseSalary`, `employmentType`, `jobLocationType`…).
 - **linkedin_jobspy.py** — `scrape_jobs(site_name=["linkedin"], location="Colombia", ...)` per term; typically 10 searches × 25.
-- **base.py** — session with `User-Agent: SEXTANTE-UTB-university-research/1.0`, request pauses, `guardar_lotes()` (append + dedupe `url`), `guardar_snapshot()`.
+- **base.py** — session with `User-Agent: SEXTANTE-UTB-university-research/1.0`, request pauses, `guardar_lotes()` (append + dedupe `url`, never rewriting what was already seen), `guardar_snapshot()`.
 - **esquema.py** — defines and validates the single output contract.
-- **sync_hf.py** — downloads `store/` from the HF dataset (dedupe/restore); tolerates a non-existing repo on the very first run.
-- **emitir_dataset.py** — `consolidar()` merges SPE+curated and adds `almacen`; `CREATE OR REPLACE TABLE vacantes` in DuckDB, parquet shards (`FILAS_POR_SHARD=60_000`), dataset card with provenance/ethics and **`store/` staging** so HF is the persistent memory.
+- **sync_hf.py** — `restaurar_stores()` splits what was published between the two stores by `almacen`; `descargar_estado()` picks the weekly layout or, if the repo has no weekly files yet, the inherited `store/`. It writes `data/raw/_publicado.json` so the emission can measure real growth.
+- **emitir_dataset.py** — `consolidar()` merges SPE+curated and adds `almacen`; `particionar_por_semana()` groups by `fecha_captura`; `_salida_estable()` fixes dtypes and row order so identical content yields identical bytes (and `upload_folder` skips the file); it generates the dataset card, `estado.json` and, on `--hf-upload`, migrates the previous layout **only if the corpus is known to have been restored**.
 
 ### Level 4 · Deployment
 
@@ -195,7 +201,7 @@ flowchart TB
     end
 
     subgraph HUB["Hugging Face Hub"]
-        dset["pxtron/vacantes-colombia (private)<br/>store/ + data/ shards"]
+        dset["pxtron/vacantes-colombia (private)<br/>data/semana-*.parquet"]
     end
 
     subgraph PC["UTB machine (manual development)"]
@@ -213,8 +219,8 @@ flowchart TB
     checkout --> python --> deps --> pull
     pull --> spe --> cur --> emit
     CFG -.-> emit
-    pull -->|"downloads store/"| hfapi
-    emit -->|"rewrite (--hf-upload)"| hfapi
+    pull -->|"downloads data/semana-*.parquet"| hfapi
+    emit -->|"uploads current week (--hf-upload)"| hfapi
     hfapi --> dset
     spe --> speext
     cur --> ee
@@ -230,7 +236,7 @@ flowchart TB
     class speext,ee,li,hfapi ext;
 ```
 
-- Cadence: every 6 h (Colombia time 00/06/12/18) the runner re-captures the SPE export, appends the curated data, and **rewrites** the accumulated corpus and the unified dataset into HF.
+- Cadence: every 6 h (Colombia time 00/06/12/18) the runner re-captures the SPE export, appends the curated data and **republishes** the dataset into HF. The nominal cron is not honoured to the minute: measured across 20 runs in September–October 2026, deviations range from −3.4 h to +2.6 h with one ~8.8 h blind window. The average stays at ~4 captures per day, but not at the documented hours.
 - The runner is ephemeral: all local writes under `data/` are discarded when the job ends; accumulation continuity is guaranteed by `sync_hf --pull` at the start.
 - `HF_TOKEN` lives as a repository secret (never in code); the workflow only needs read permission for checkout.
 - The local machine (user pxtron) can run `scripts/capturar_6h.sh` for manual development; its local stores are seeds/queries, not the primary memory.
@@ -243,27 +249,28 @@ A closed loop with HF as persistent memory:
 
 ```mermaid
 flowchart LR
-    hub["HF · accumulated store/"] -->|"sync_hf --pull on each run"| norm["normalizar()<br/>same 17-column schema"]
+    hub["HF · data/semana-*.parquet"] -->|"sync_hf --pull on each run"| norm["normalizar()<br/>same 17-column schema"]
     sources["Sources (SPE / El Empleo / LinkedIn)"] -->|"raw rows (variable format)"| norm
-    norm -->|"canonical store"| stores["pair of stores<br/>data/raw/ + data/raw/spe/"]
-    stores -->|"consolidar()"| emit["emitir_dataset.py"]
-    emit --> duck["DuckDB vacantes table (local)"]
-    emit --> hfdir["HF dataset dir<br/>shards + store/"]
-    hfdir -->|"--hf-upload · rewrite"| hub
+    norm -->|"canonical append-only store"| stores["pair of stores<br/>data/raw/ + data/raw/spe/"]
+    stores -->|"consolidar() + particionar_por_semana()"| emit["emitir_dataset.py"]
+    emit --> hfdir["HF dataset dir<br/>data/semana-*.parquet + card"]
+    hfdir -->|"--hf-upload · only what changed"| hub
 
     classDef d1 fill:#1168bd,color:#fff;
     classDef d2 fill:#d9ead3,stroke:#6aa84f;
     classDef d3 fill:#fff2cc,stroke:#bf9000;
     class sources,norm d1;
-    class stores,duck,hub d2;
+    class stores,hub d2;
     class emit,hfdir d3;
 ```
 
 Growth and storage:
 
-- The corpus grows with the **genuinely new** vacancies (dedupe by `CODIGO_VACANTE` for SPE and by `url` for curated); HF is rewritten on the same paths on each run, with no purges.
-- HF storage quota (100 GB on the free account) is measured on the repo's current content: fractions of a GB today and headroom for millions of historical rows.
-- Snapshots (`data/snapshots/`) and local DuckDB remain as manual development/registry artefacts (the runner keeps no disk).
+- The corpus grows with the **genuinely new** vacancies (dedupe by `CODIGO_VACANTE` for SPE and by `url` for curated); no purges.
+- Growth on HF is bounded by the immutability of closed weeks: each vacancy is uploaded **once**, and only the current week's file is rewritten on each run.
+- Measured cost: ~35 k vacancies/week ≈ 3.3 MB of new data per day against ~1.32 GB of upload per day in the previous layout (~40× less). The already-accumulated history (18.5 GB) does not shrink — HF does not release it — but it stops growing.
+- `data/raw/_publicado.json` holds the previous run's counts, which lets the workflow Summary tell "it grew" apart from "it contributed nothing" — the signal that exposes a dead source.
+- Snapshots (`data/snapshots/`) remain as manual development/registry artefacts (the runner keeps no disk).
 
 ---
 
@@ -290,7 +297,7 @@ sequenceDiagram
     P->>P: exportar_a_canonico() → guardar_parquet()
 ```
 
-Latest export result: **284,958 rows → 246,551 unique** in the store by `id_vacante` (the export includes duplicated rows of the same `CODIGO_VACANTE` dropped by `guardar_parquet()`).
+Export result observed on 2026-10-04: **~285 k rows → 319,765 unique** rows accumulated in the store by `id_vacante` (the export includes duplicated rows of the same `CODIGO_VACANTE` dropped by `guardar_parquet()`).
 
 ---
 
@@ -317,8 +324,8 @@ erDiagram
         text modalidad "Teletrabajo if SPE TELETRABAJO=1"
         text nivel_educativo "native SPE"
         text experiencia_texto "N months (SPE)"
-        text fecha_captura "%Y-%m-%d %H:%M:%S"
-        text almacen "spe|curado (DuckDB)"
+        text fecha_captura "%Y-%m-%d %H:%M:%S · first observation"
+        text almacen "spe|curado (weekly file)"
     }
 ```
 
@@ -341,8 +348,8 @@ erDiagram
 | `modalidad` | all | ~0.8% remote | SPE `TELETRABAJO=1` |
 | `nivel_educativo` | SPE | ~100% | was 0% before |
 | `experiencia_texto` | SPE | ~100% | `MESES_EXPERIENCIA_CARGO` |
-| `fecha_captura` | all | 100% | stamp `%Y-%m-%d %H:%M:%S` |
-| `almacen` (DuckDB) | emission | — | `spe`/`curado` |
+| `fecha_captura` | all | 100% | stamp `%Y-%m-%d %H:%M:%S`; because stores are append-only it is the **first** time we saw the vacancy |
+| `almacen` | emission | — | `spe`/`curado`; decides which local store each row returns to on `--pull` |
 
 ---
 
@@ -352,17 +359,22 @@ erDiagram
 | --- | --- | --- |
 | Master source | SPE official export (API `/backbue/v1`) | State data, official mechanism, ~285k offers/capture, ~100% coverage of key fields. |
 | Per-source dedupe | SPE by `id_vacante` (CODIGO_VACANTE); curated by `url` | Several distinct SPE vacancies share the provider's `url`; record-level precedence. |
+| Store semantics | **append-only** (`keep="first"`): what was already seen is never rewritten | Pins `fecha_captura` to the first observation (making vacancy lifetime measurable), makes the store byte-reproducible, and is the precondition for immutable weekly files. Without it, an edited vacancy would force rewriting its week's file. |
 | Schema | Single 17-column canonical schema (`esquema.py`) | Single output contract; `normalizar()` before saving, `validar()` in EDA. |
-| Capture cadence | workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia) | Balance between data freshness and load on the state portal; 4 daily captures. |
-| Persistent memory | HF = canonical store (`store/`) | The runner is ephemeral; `sync_hf --pull` restores the accumulation before capturing and `emitir_dataset` rewrites it afterwards. |
-| Corpus retention | accumulation without purges (dedupe by genuinely new vacancy) | Real growth = new vacancies; HF quota is measured on the repo's current content. |
+| Dataset partition | by **`fecha_captura` week**, not `fecha_publicacion` | Archiving a March vacancy when the export delivers it in October would force reopening and rewriting an already-published file. With `fecha_captura`, each file is written once. |
+| Stable writes | dtypes and row order pinned in `_salida_estable()` | Identical content → identical bytes → `upload_folder` skips the file. Without it, the ~40× saving is lost to formatting noise. |
+| Capture cadence | workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia) | Balance between data freshness and load on the state portal; 4 daily captures (the scheduler does not honour the minute). |
+| Persistent memory | HF = canonical store (`data/semana-*.parquet`) | The runner is ephemeral; `sync_hf --pull` rebuilds the stores from what was published before capturing, and `emitir_dataset` republishes afterwards. |
+| Corpus retention | accumulation without purges (dedupe by genuinely new vacancy) | Real growth = new vacancies; with immutable weeks, uploading no longer costs the size of the corpus. |
+| Visible failures | `corpus.py` exits with code 1 if a source fails; `estado.json` + Summary compare against what was published | Previously the store restored from HF made everything look healthy while the corpus stopped growing. |
+| Layout migration | `store/` and `train-*` are deleted only if the corpus is known to have been restored (rows ≥ published) | A failed `--pull` would publish a tiny dataset; deleting the history is irreversible from code (recoverable only from HF's history). |
 | HF upload | automatic on every run (`--hf-upload`, `HF_TOKEN` as secret) | The corpus must grow by itself; the token lives in the repo secret, not in code. |
 | Concurrency | `concurrency: captura-periodica` (cancel-in-progress: false) | Avoids two simultaneous runs writing to HF at once. |
 | Local cron | disabled (script kept for manual development) | Automatic operation belongs to GitHub Actions; the UTB machine stays free. |
 | Snapshots | only on manual captures (canonical parquet, no raw CSV) | The raw export CSV is ~415 MB; parquet is enough as a reproducible cut. |
 | SPE intermittent TLS | `verify=False` **only** after validation failure | Read-only state site; warned via `warnings`. |
 | Publishing | **private** HF dataset `pxtron/vacantes-colombia` | Academic use; no public redistribution of third-party portal data. |
-| Analytics storage | local DuckDB + parquet | Serverless analytics; parquet is ready for `polars`/`pyarrow`/`spark` if needed. |
+| Analytics storage | HF only (weekly parquet) | DuckDB was removed: it had been write-only since `898a7e3` and produced a ~200 MB binary under `data/duckdb/` that was not in `.gitignore`. `pyarrow`/`polars` read the parquet files serverlessly. |
 
 Original document is in **[Spanish (arquitectura.md)](arquitectura.md)**; this English version is a translation.
 
@@ -370,22 +382,27 @@ Original document is in **[Spanish (arquitectura.md)](arquitectura.md)**; this E
 
 ## Analytics and job-title–skill graph layer
 
-Analytics reads the private `pxtron/vacantes-colombia` `data/*.parquet` shards.
+Analytics reads the private `pxtron/vacantes-colombia` `data/semana-*.parquet`
+files.
 `src/analisis/datos_hf.py` uses the Hugging Face cache and records the resolved
-commit; it neither invokes collectors nor changes stores. DuckDB can query the
-cached parquet files directly.
+Analytics reads the private `pxtron/vacantes-colombia` `data/semana-*.parquet`
+files. `src/analisis/datos_hf.py` uses the Hugging Face cache and records the
+resolved commit; it neither invokes collectors nor changes stores. Since each
+vacancy lives in a single file and rows are frozen, deduplication by
+`id_vacante` is only a safety net.
 
-`src/procesamiento/habilidades.py` loads the official Spanish ESCO CSV and
-detects explicit mentions. `src/grafos/construir_grafo.py` emits nodes, edges,
-audit data, and a provenance manifest. `metricas_grafo.py` provides TF-IDF
-cosine similarity, communities, and exploratory proximity signals.
+`src/procesamiento/habilidades.py` extracts **endogenous vocabulary**: n-grams
+from the descriptions themselves, filtered by frequency and an occupational
+signal (Aho-Corasick), with no dependency on an external taxonomy.
+`src/grafos/construir_grafo.py` emits nodes, edges, audit data, and a provenance
+manifest. `metricas_grafo.py` provides TF-IDF cosine similarity, communities,
+and exploratory proximity signals.
 
 ```mermaid
 flowchart LR
-    hf["Private HF<br/>data/*.parquet"] --> access["datos_hf.py<br/>read + revision"]
+    hf["Private HF<br/>data/semana-*.parquet"] --> access["datos_hf.py<br/>read + revision"]
     access --> dashboard["dashboard_metricas.ipynb"]
-    access --> extractor["habilidades.py"]
-    esco["Spanish ESCO CSV"] --> extractor
+    access --> extractor["habilidades.py<br/>n-grams + occupational signal"]
     extractor --> builder["construir_grafo.py"]
     builder --> artifacts["nodes/edges/audit/manifest"]
     artifacts --> network["grafo_habilidades_ocupaciones.ipynb"]
@@ -393,3 +410,10 @@ flowchart LR
 
 The current volume does not justify Spark. It remains an option for millions
 of texts or distributed NLP/embedding inference.
+
+**Current findings (2026-10-04).** Occupational mapping is the bottleneck:
+195,175 normalised job titles of which 157,172 appear only once, and with
+`minimo_ocupacion=5` only 6,763 occupations remain over 90,015 vacancies. Node
+degree does not help prioritise skills — its top terms are contractual
+conditions — while ranking by occupational signal does yield legible terms. The
+network is connected (1 component).
