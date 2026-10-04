@@ -8,6 +8,11 @@ Uso:
 LinkedIn y El Empleo guardan en data/raw/vacantes.csv con deduplicación por url.
 El SPE (export oficial total) guarda su propio store canónico parquet en
 data/raw/spe/vacantes_spe.parquet con deduplicación por CODIGO_VACANTE.
+
+Ambos stores son append-only: una vacante queda congelada con la información que
+tenía la primera vez que se vio. Si alguna fuente solicitada falla, el proceso
+termina con código de salida 1 (no con 0) para que el pipeline no parezca sano
+por el hecho de que el store restaurado desde Hugging Face siga en su sitio.
 """
 
 from __future__ import annotations
@@ -85,6 +90,7 @@ def main() -> None:
     args = parser.parse_args()
 
     fuentes = ["linkedin", "elempleo", "spe"] if args.todo else args.fuentes
+    fallos: list[str] = []
 
     for fuente in fuentes:
         print(f"== {fuente.upper()} ==")
@@ -97,12 +103,14 @@ def main() -> None:
                 df = recolectar_spe(args.spe_csv)
         except Exception as exc:  # noqa: BLE001
             print(f"[ERROR] fuente '{fuente}': {exc}")
+            fallos.append(fuente)
             continue
         base.resumen_fuente(fuente, df)
         if len(df):
             if fuente == "spe":
-                total = spe.guardar_parquet(df)
-                print(f"  -> {total} registros en {spe.RUTA_PARQUET_SPE}")
+                nuevas = spe.guardar_parquet(df)
+                total = len(pd.read_parquet(spe.RUTA_PARQUET_SPE, columns=["id_vacante"]))
+                print(f"  -> {nuevas} nuevas (store: {total} en total) -> {spe.RUTA_PARQUET_SPE}")
                 if args.snapshot:
                     snap = base.guardar_snapshot(spe.RUTA_PARQUET_SPE, prefijo="vacantes_spe", subdir="spe")
                     print(f"  -> snapshot en {snap}")
@@ -111,6 +119,13 @@ def main() -> None:
                 print(f"  -> {agregadas} nuevas en {base.RUTA_VACANTES}")
                 if args.snapshot:
                     base.guardar_snapshot(base.RUTA_VACANTES)
+
+    # Sin esto, una fuente caída se pierde en el log: el store restaurado desde
+    # HF sigue ahí y la emisión republica el mismo corpus, así que el pipeline
+    # se vería sano mientras deja de crecer. Salir con código 1 lo hace visible.
+    if fallos:
+        print(f"[ERROR] {len(fallos)} fuente(s) fallaron: {', '.join(fallos)}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

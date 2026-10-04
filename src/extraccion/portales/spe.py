@@ -13,7 +13,9 @@ Este módulo:
   2. lo mapea al esquema canónico de 17 columnas (src/extraccion/esquema.py);
   3. lo guarda en data/raw/spe/vacantes_spe.parquet con deduplicación por
      CODIGO_VACANTE (ustedes la matrícula de la vacante, no por url: varias
-     vacantes distintas pueden compartir la url del prestador).
+     vacantes distintas pueden compartir la url del prestador). El store es
+     append-only: una vacante queda congelada con el texto que tenía la primera
+     vez que se vio (ver `guardar_parquet`).
 
 Referencia: los campos brutos usan mayúsculas (CODIGO_VACANTE, TITULO_VACANTE,
 DESCRIPCION_VACANTE, NIVEL_ESTUDIOS, RANGO_SALARIAL, NOMBRE_PRESTADOR,
@@ -160,25 +162,39 @@ def guardar_parquet(df: pd.DataFrame, ruta: Path = RUTA_PARQUET_SPE) -> int:
     """Adjunta las filas nuevas al store canónico (parquet) del SPE.
 
     Deduplica por id_vacante (CODIGO_VACANTE): es la clave primaria real del
-    SPE; varias vacantes distintas pueden compartir url. Devuelve el número
-    de registros nuevos incorporados.
+    SPE; varias vacantes distintas pueden compartir url.
+
+    El store se congela con `keep="first"`: cuando una vacante reaparece en un
+    export posterior, la fila que entró primero gana y nunca se reescribe. Dos
+    consecuencias:
+
+      - `fecha_captura` queda fijada a la **primera** observación, que es lo que
+        permite medir permanencia de la vacante y archivar el corpus por semana
+        de captura (ver `src/extraccion/emitir_dataset.py`).
+      - El store solo crece; no se reescribe por completo en cada corrida.
+
+    Devuelve el número de registros nuevos incorporados (0 si el export no
+    trajo ninguna vacante que no estuviera ya).
     """
     df = normalizar(df.copy())
     ruta.parent.mkdir(parents=True, exist_ok=True)
+    total_previo = 0
     if ruta.exists():
         previo = pd.read_parquet(ruta, columns=COLUMNAS_ESQUEMA)
+        total_previo = len(previo)
         df = pd.concat([previo, df], ignore_index=True)
-    df = df.drop_duplicates(subset=["id_vacante"], keep="last")
+    df = df.drop_duplicates(subset=["id_vacante"], keep="first")
+    nuevos = max(len(df) - total_previo, 0)
     df = df.sort_values("fecha_publicacion", na_position="last").reset_index(drop=True)
     df.to_parquet(ruta, index=False)
-    return len(df)
+    return nuevos
 
 
 def extraer_spe(csv: Path | None = None, fecha_captura: str | None = None) -> int:
     """Orquesta la extracción del SPE y guarda el store canónico parquet.
 
-    Devuelve el número de registros guardados. Si `csv` no se pasa, descarga
-    el export completo del portal (mecanismo oficial de exportación).
+    Devuelve el número de vacantes nuevas incorporadas al store. Si `csv` no se
+    pasa, descarga el export completo del portal (mecanismo oficial).
     """
     base.crear_estructura_datos()
     csv_origen = csv or descargar_export_csv(RUTA_CSV_SPE)

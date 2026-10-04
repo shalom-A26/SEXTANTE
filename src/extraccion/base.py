@@ -73,6 +73,11 @@ def _concat_canonico(*frames: pd.DataFrame) -> pd.DataFrame:
 def guardar_lotes(df: pd.DataFrame, ruta: Path = RUTA_VACANTES) -> int:
     """Adjunta filas nuevas y elimina duplicados por url posteriormente.
 
+    Una vacante ya presente nunca se reescribe: solo se agregan las filas cuya
+    `url` no estaba antes. Es la misma semántica append-only que aplica al store
+    del SPE (`portales/spe.guardar_parquet`), y por eso `fecha_captura` queda
+    fijada a la primera observación.
+
     Devuelve el número de filas nuevas incorporadas.
     """
     crear_estructura_datos()

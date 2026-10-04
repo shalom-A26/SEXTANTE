@@ -48,38 +48,68 @@ jobs:
         if: always()
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
           import pathlib
 
           import pandas as pd
 
           raiz = pathlib.Path.cwd()
-          now = pd.Timestamp.now()
-          lines = [
-              "# Resumen de captura",
-              f"- Fecha: {now:%Y-%m-%d %H:%M:%S}",
-          ]
+          lineas = [f"# Resumen de captura — {pd.Timestamp.now():%Y-%m-%d %H:%M} UTC"]
 
-          spe = raiz / "data/raw/spe/vacantes_spe.parquet"
-          curado = raiz / "data/raw/vacantes.csv"
-          duckdb_path = raiz / "data/duckdb/sextante.duckdb"
+          def leer(ruta):
+              if ruta.exists():
+                  try:
+                      return json.loads(ruta.read_text(encoding="utf-8"))
+                  except json.JSONDecodeError:
+                      pass
+              return None
 
-          if spe.exists():
-              n = len(pd.read_parquet(spe))
-              lines.append(f"- Store SPE: {n:,} vacantes unicas")
+          base = leer(raiz / "data/raw/_publicado.json")
+          estado = leer(raiz / "data/emitido/vacantes-colombia/estado.json")
+
+          if base:
+              rev = str(base.get("revision", ""))[:8]
+              lineas.append(
+                  f"- Restaurado desde HF: **{base.get('filas', 0):,}** vacantes "
+                  f"({base.get('filas_spe', 0):,} SPE + {base.get('filas_curado', 0):,} curado, rev. {rev})"
+              )
           else:
-              lines.append("- Store SPE: no generado (posible fallo de la fuente)")
+              lineas.append(
+                  "- ⚠️ No se restauró corpus desde HF: puede ser la primera corrida, "
+                  "un fallo de red o un token inválido. Si el repo ya tenía vacantes, "
+                  "**la corrida siguiente publicará un dataset incompleto**."
+              )
 
-          if curado.exists():
-              n = len(pd.read_csv(curado, dtype=str))
-              lines.append(f"- Corpus curado: {n:,} vacantes")
+          if estado:
+              nuevas = estado.get("filas_nuevas")
+              if nuevas is None:
+                  lineas.append(
+                      f"- Publicado: **{estado.get('filas', 0):,}** vacantes en "
+                      f"{estado.get('archivos_semanales', 0)} archivos semanales "
+                      "(sin base de la corrida previa: no se puede medir el crecimiento)"
+                  )
+              else:
+                  if nuevas > 0:
+                      crecimiento = f"**+{nuevas:,}** nuevas"
+                  elif nuevas == 0:
+                      crecimiento = "⚠️ **sin vacantes nuevas** (la captura no aportó nada)"
+                  else:
+                      crecimiento = (
+                          f"⚠️ **{nuevas:,} menos** que las publicadas: el corpus se encogió"
+                      )
+                  lineas.append(f"- Publicado: **{estado.get('filas', 0):,}** vacantes ({crecimiento})")
+              lineas.append(
+                  f"- Semana en curso: `{estado.get('semana_en_curso')}` "
+                  f"({estado.get('filas_semana_en_curso', 0):,} filas; solo este archivo se reescribe)"
+              )
+              lineas.append(f"- Última captura de los datos: {estado.get('captura_mas_reciente')}")
           else:
-              lines.append("- Corpus curado: vacio")
+              lineas.append("- ⚠️ **No se publicó el dataset**: la emisión falló (ver el paso anterior).")
+              if base:
+                  lineas.append(
+                      f"- El corpus acumulado sigue intacto en HF "
+                      f"({base.get('filas', 0):,} vacantes); la próxima corrida lo recuperará."
+                  )
 
-          if duckdb_path.exists():
-              import duckdb
-
-              n = duckdb.connect(str(duckdb_path)).execute("SELECT count(*) FROM vacantes").fetchone()[0]
-              lines.append(f"- Dataset unificado (DuckDB): {n:,} filas")
-
-          print("\n".join(lines))
+          print("\n".join(lineas))
           PY

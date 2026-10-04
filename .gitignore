@@ -15,6 +15,9 @@ __pycache__/
 data/snapshots/
 data/raw/spe/
 data/emitido/
+data/duckdb/
+# Estado de la corrida que deja `sync_hf --pull` (se regenera en cada captura).
+data/raw/_publicado.json
 
 # Artefactos analíticos reproducibles
 data/procesados/grafos/*

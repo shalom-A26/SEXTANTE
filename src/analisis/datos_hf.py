@@ -1,13 +1,14 @@
 """Acceso reproducible al dataset analítico de SEXTANTE en Hugging Face.
 
 Este módulo es deliberadamente independiente del pipeline de extracción. Solo
-descarga los shards publicados (parquet, actualizados por el pipeline cada 6 h)
+descarga los archivos publicados (parquet, actualizados por el pipeline cada 6 h)
 y los consulta en modo lectura. Hugging Face es la única fuente analítica del
 proyecto: no hay base local que la sustituya.
 
-Los shards pueden acumular copias obsoletas cuando se re-emite el dataset, por
-lo que toda carga deduplica por `id_vacante` y reporta cuántas filas se
-conservaron.
+Los archivos son semanales (`data/semana-*.parquet`) y cada vacante vive en el
+de la semana en que la vimos por primera vez, con las filas congeladas. El
+dedupe por `id_vacante` queda como red de seguridad (y por compatibilidad con
+datasets previos, que podían traer filas repetidas entre shards).
 """
 
 from __future__ import annotations
