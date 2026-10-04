@@ -31,7 +31,9 @@ SEXTANTE is an ETL/ELT pipeline for Colombian job vacancies:
 
 Current state: **322,313 vacancies** (319,765 SPE + 2,548 curated) in the private HF dataset `pxtron/vacantes-colombia`, published as weekly parquet files; active workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia time). There is no local database: the analytics layer reads from HF.
 
-**Why weekly.** The previous layout published the corpus twice (`store/` folder plus `train-*-of-*` shards) and never deleted the shards of previous generations: 650 MB of content with 283 MB dead (44 %) and ~1.32 GB of upload per day. With the weekly layout, each vacancy lives in the file for the week it was first seen; because rows are frozen, files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file: **~50 MB instead of ~1.5 GB**. The migration executed on 2026-10-04 left the repo at **166 MB of content** (650 MB before) with the same 322,313 vacancies. `used_storage` (~19 GB, mostly history HF does not release) does not shrink when files are deleted: what stops is the growth.
+**Why weekly.** The previous layout published the corpus twice (`store/` folder plus `train-*-of-*` shards) and never deleted the shards of previous generations: 650 MB of content with 283 MB dead (44 %) and ~1.32 GB of upload per day. With the weekly layout, each vacancy lives in the file for the week it was first seen; because rows are frozen, files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file: **~14 MB per run on average**, **~58 MB/day** against the previous layout's ~1.32 GB/day (~23× less). The migration executed on 2026-10-04 left the repo at **166 MB of content** (650 MB before) with the same 322,313 vacancies. `used_storage` (~19 GB, mostly history HF does not release) does not shrink when files are deleted: what stops is the growth.
+
+Week W40 is the transitional exception: it holds the legacy backfill (277,864 of the 322,313 rows fall into it, because earlier rows inherit `fecha_captura` from their last observation), so its file weighs 143 MB and every run until Monday the 5th rewrites it whole. From W41 on, the current week's file starts empty and the cost returns to ~14 MB per run.
 
 ---
 
@@ -268,7 +270,7 @@ Growth and storage:
 
 - The corpus grows with the **genuinely new** vacancies (dedupe by `CODIGO_VACANTE` for SPE and by `url` for curated); no purges.
 - Growth on HF is bounded by the immutability of closed weeks: each vacancy is uploaded **once**, and only the current week's file is rewritten on each run.
-- Measured cost: ~35 k vacancies/week ≈ 3.3 MB of new data per day against ~1.32 GB of upload per day in the previous layout (~40× less). The already-accumulated history (18.5 GB) does not shrink — HF does not release it — but it stops growing.
+- Cost: ~35 k new vacancies/week ≈ 3.3 MB of new data per day, but the upload is paid on the whole current week's file (~14 MB average per run, ~58 MB/day) against ~1.32 GB/day in the previous layout (~23× less). The already-accumulated history (18.5 GB) does not shrink — HF does not release it — but it stops growing.
 - `data/raw/_publicado.json` holds the previous run's counts, which lets the workflow Summary tell "it grew" apart from "it contributed nothing" — the signal that exposes a dead source.
 - Snapshots (`data/snapshots/`) remain as manual development/registry artefacts (the runner keeps no disk).
 
@@ -362,7 +364,7 @@ erDiagram
 | Store semantics | **append-only** (`keep="first"`): what was already seen is never rewritten | Pins `fecha_captura` to the first observation (making vacancy lifetime measurable), makes the store byte-reproducible, and is the precondition for immutable weekly files. Without it, an edited vacancy would force rewriting its week's file. |
 | Schema | Single 17-column canonical schema (`esquema.py`) | Single output contract; `normalizar()` before saving, `validar()` in EDA. |
 | Dataset partition | by **`fecha_captura` week**, not `fecha_publicacion` | Archiving a March vacancy when the export delivers it in October would force reopening and rewriting an already-published file. With `fecha_captura`, each file is written once. |
-| Stable writes | dtypes and row order pinned in `_salida_estable()` | Identical content → identical bytes → `upload_folder` skips the file. Without it, the ~40× saving is lost to formatting noise. |
+| Stable writes | dtypes and row order pinned in `_salida_estable()` | Identical content → identical bytes → `upload_folder` skips the file. Without it, the ~23× saving is lost to formatting noise. |
 | Capture cadence | workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia) | Balance between data freshness and load on the state portal; 4 daily captures (the scheduler does not honour the minute). |
 | Persistent memory | HF = canonical store (`data/semana-*.parquet`) | The runner is ephemeral; `sync_hf --pull` rebuilds the stores from what was published before capturing, and `emitir_dataset` republishes afterwards. |
 | Corpus retention | accumulation without purges (dedupe by genuinely new vacancy) | Real growth = new vacancies; with immutable weeks, uploading no longer costs the size of the corpus. |

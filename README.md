@@ -40,7 +40,7 @@ Desarrollar una solución de analítica y minería de datos que permita comprend
 - **Corpus grande SPE**: `vacantes_spe.parquet` (319.765 vacantes únicas acumuladas por `CODIGO_VACANTE`, 2021→hoy, cobertura ~100% en descripción, nivel educativo, departamento, rango salarial, contrato y experiencia).
 - **Corpus curado**: `data/raw/vacantes.csv` (2.548 vacantes de El Empleo + LinkedIn, sin duplicados por `url`).
 - **Dataset publicado**: **322.313 vacantes** en el dataset Hugging Face privado **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)**, como archivos parquet **semanales** bajo `data/` (una vacante vive en el archivo de la semana en que la vimos por primera vez). No hay base local: la capa analítica lee de HF.
-- **Stores append-only**: una vacante ya vista **no se reescribe**; `fecha_captura` queda fijada a la primera observación. Eso permite medir permanencia de la vacante y hace que los archivos de semanas cerradas sean inmutables (publicar cuesta ~50 MB por corrida en vez de ~1,5 GB).
+- **Stores append-only**: una vacante ya vista **no se reescribe**; `fecha_captura` queda fijada a la primera observación. Eso permite medir permanencia de la vacante y hace que los archivos de semanas cerradas sean inmutables (subir pasa de ~1,32 GB/día a ~58 MB/día).
 - **Captura automática en la nube**: workflow de **GitHub Actions** (repo privado) cada 6 horas. **Hugging Face es la memoria persistente** del pipeline; el cron local está desactivado y el corpus se acumula sin purgas.
   - *Cadencia real*: el cron nominal es `0 5,11,17,23 UTC` (00/06/12/18 Colombia), pero el planificador de GitHub no lo respeta al minuto. Medido sobre 20 corridas de septiembre–octubre de 2026: los desvíos van de −3,4 h a +2,6 h y hay una ventana sin corridas de ~8,8 h. El promedio se mantiene en ~4 capturas diarias, pero no a las horas documentadas.
 - **Fallos visibles**: si una fuente falla, la corrida termina en rojo y el Summary de Actions marca "sin vacantes nuevas" o "el corpus se encogió".
@@ -107,7 +107,7 @@ flowchart TB
 
 El runner se descarta al terminar; **todo el corpus acumulado vive en HF**. Cada corrida recompon los stores locales desde los archivos publicados, le agrega las vacantes nuevas y vuelve a subir el dataset.
 
-El crecimiento real proviene de las vacantes nuevas que aún no existían, deduplicadas por `CODIGO_VACANTE` (SPE) o por `url` (curado); no hay purgas. Como los stores son append-only, una vacante ya vista no se reescribe: eso hace que los archivos de semanas cerradas sean **inmutables**, y `upload_folder` los omite porque su contenido ya está en el repo. En cada corrida solo se sube el archivo de la semana en curso (~50 MB en vez de ~1,5 GB).
+El crecimiento real proviene de las vacantes nuevas que aún no existían, deduplicadas por `CODIGO_VACANTE` (SPE) o por `url` (curado); no hay purgas. Como los stores son append-only, una vacante ya vista no se reescribe: eso hace que los archivos de semanas cerradas sean **inmutables**, y `upload_folder` los omite porque su contenido ya está en el repo. En cada corrida solo se sube el archivo de la semana en curso: media de **~14 MB por corrida**, **~58 MB/día** (4 corridas) frente a los ~1,32 GB/día del layout anterior.
 
 ## Captura periódica (secuencia)
 

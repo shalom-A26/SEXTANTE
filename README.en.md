@@ -40,7 +40,7 @@ Develop an analytics and data-mining solution that helps understand the needs of
 - **Big SPE corpus**: `vacantes_spe.parquet` (319,765 unique vacancies accumulated per `CODIGO_VACANTE`, 2021→today, ~100% coverage of description, education level, department, salary range, contract and experience).
 - **Curated corpus**: `data/raw/vacantes.csv` (2,548 vacancies from El Empleo + LinkedIn, deduplicated by `url`).
 - **Published dataset**: **322,313 vacancies** in the private Hugging Face dataset **[`pxtron/vacantes-colombia`](https://huggingface.co/datasets/pxtron/vacantes-colombia)**, as **weekly** parquet files under `data/` (a vacancy lives in the file for the week it was first seen). There is no local database: the analytics layer reads from HF.
-- **Append-only stores**: a vacancy already seen is **never rewritten**; `fecha_captura` is pinned to the first observation. That makes closed weeks immutable, so publishing costs ~50 MB per run instead of ~1.5 GB — and it makes vacancy lifetime measurable.
+- **Append-only stores**: a vacancy already seen is **never rewritten**; `fecha_captura` is pinned to the first observation. That makes closed weeks immutable, so uploading drops from ~1.32 GB/day to ~58 MB/day — and it makes vacancy lifetime measurable.
 - **Automatic cloud capture**: **GitHub Actions** workflow (private repo) every 6 hours. **Hugging Face is the pipeline's persistent memory**; the local cron is disabled and the corpus accumulates with no purges.
   - *Actual cadence*: the nominal cron is `0 5,11,17,23 UTC` (00/06/12/18 Colombia), but GitHub's scheduler does not honour it to the minute. Measured across 20 runs in September–October 2026: deviations range from −3.4 h to +2.6 h, with one ~8.8 h window with no run at all. The average stays at ~4 captures per day, but not at the documented hours.
 - **Failures are visible**: if a source fails, the run ends red and the Actions Summary flags "no new vacancies" or "the corpus shrank".
@@ -107,7 +107,7 @@ flowchart TB
 
 The runner is discarded when the job finishes; **the whole accumulated corpus lives in HF**. Each run rebuilds the local stores from the published files, appends newly seen vacancies and publishes the dataset again.
 
-Real growth comes from vacancies not yet in the store, deduplicated by `CODIGO_VACANTE` (SPE) or `url` (curated); no purges. Because the stores are append-only, an already-seen vacancy is never rewritten, so files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file (~50 MB instead of ~1.5 GB).
+Real growth comes from vacancies not yet in the store, deduplicated by `CODIGO_VACANTE` (SPE) or `url` (curated); no purges. Because the stores are append-only, an already-seen vacancy is never rewritten, so files for closed weeks are **immutable** and `upload_folder` skips them (their content is already in the repo). Each run uploads only the current week's file: **~14 MB per run on average**, **~58 MB/day** (4 runs) against the previous layout's ~1.32 GB/day.
 
 ## Periodic capture (sequence)
 

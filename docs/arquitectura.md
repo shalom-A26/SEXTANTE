@@ -31,7 +31,9 @@ SEXTANTE es un pipeline ETL/ELT de vacantes laborales colombianas:
 
 Estado actual: **322.313 vacantes** (319.765 SPE + 2.548 curado) en el dataset privado HF `pxtron/vacantes-colombia`, publicado como archivos parquet semanales; workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 hora de Colombia) activo. No hay base local: la capa analítica lee de HF.
 
-**Por qué semanal.** El layout anterior publicaba el corpus dos veces (carpeta `store/` + shards `train-*-of-*`) y nunca borraba los shards de generaciones anteriores: 650 MB de contenido con 283 MB muertos (44 %) y ~1,32 GB de subida por día. Con el layout semanal, cada vacante vive en el archivo de la semana en que la vimos por primera vez; como las filas están congeladas, los archivos de semanas cerradas son **inmutables** y `upload_folder` los omite porque su contenido ya está en el repo. En cada corrida solo se sube el archivo de la semana en curso: **~50 MB en vez de ~1,5 GB**. La migración ejecutada el 2026-10-04 dejó el repo en **166 MB de contenido** (antes 650 MB) con las mismas 322.313 vacantes. `used_storage` (~19 GB, casi todo historial que HF no libera) no baja al borrar archivos: lo que se detiene es el crecimiento.
+**Por qué semanal.** El layout anterior publicaba el corpus dos veces (carpeta `store/` + shards `train-*-of-*`) y nunca borraba los shards de generaciones anteriores: 650 MB de contenido con 283 MB muertos (44 %) y ~1,32 GB de subida por día. Con el layout semanal, cada vacante vive en el archivo de la semana en que la vimos por primera vez; como las filas están congeladas, los archivos de semanas cerradas son **inmutables** y `upload_folder` los omite porque su contenido ya está en el repo. En cada corrida solo se sube el archivo de la semana en curso: media de **~14 MB por corrida**, **~58 MB/día** frente a los ~1,32 GB/día del layout anterior (~23× menos). La migración ejecutada el 2026-10-04 dejó el repo en **166 MB de contenido** (antes 650 MB) con las mismas 322.313 vacantes. `used_storage` (~19 GB, casi todo historial que HF no libera) no baja al borrar archivos: lo que se detiene es el crecimiento.
+
+La semana W40 es la excepción transitoria: Concentra el backfill heredado (277.864 de las 322.313 filas caen en ella porque las filas anteriores heredan `fecha_captura` de su última observación), así que su archivo pesa 143 MB y cada corrida hasta el lunes 5 lo reescribe entero. A partir de W41 el archivo de la semana en curso arranca vacío y el coste vuelve a los ~14 MB por corrida.
 
 ---
 
@@ -268,7 +270,7 @@ Crecimiento y almacenamiento:
 
 - El corpus crece con las vacantes **realmente nuevas** (dedupe por `CODIGO_VACANTE` en SPE y por `url` en el curado); no hay purgas.
 - El crecimiento en HF está acotado por la inmutabilidad de las semanas cerradas: cada vacante se sube **una vez** y solo el archivo de la semana en curso se reescribe en cada corrida.
-- Coste medido: ~35 k vacantes/semana ≈ 3,3 MB de dato nuevo diario frente a ~1,32 GB de subida por día del layout anterior (~40× menos). El historial ya acumulado (18,5 GB) no baja: HF no lo libera, pero deja de crecer.
+- Coste: ~35 k vacantes nuevas/semana ≈ 3,3 MB de dato nuevo al día, pero la subida se paga sobre el archivo entero de la semana en curso (~14 MB de media por corrida, ~58 MB/día) frente a ~1,32 GB/día del layout anterior (~23× menos). El historial ya acumulado (18,5 GB) no baja: HF no lo libera, pero deja de crecer.
 - `data/raw/_publicado.json` guarda los conteos de la corrida anterior, lo que permite que el Summary del workflow distinga "creció" de "no aportanó nada" — la señal que delata una fuente caída.
 - Los snapshots (`data/snapshots/`) quedan como artefactos de desarrollo/registro manual (el runner no conserva disco).
 
@@ -362,7 +364,7 @@ erDiagram
 | Semántica de los stores | **append-only** (`keep="first"`): lo ya visto no se reescribe | Fija `fecha_captura` a la primera observación (permite medir permanencia), hace el store reproducible byte a byte y es la condición para que los archivos semanales sean inmutables. Sin esto, una vacante editada obligaría a reescribir el archivo de su semana. |
 | Esquema | 17 columnas canónicas únicas (`esquema.py`) | Contrato de salida único; `normalizar()` antes de guardar, `validar()` en EDA. |
 | Partición del dataset | por **semana de `fecha_captura`**, no de `fecha_publicacion` | Archivar una vacante de marzo cuando el export la entrega en octubre obligaría a reabrir y reescribir un archivo ya publicado. Con `fecha_captura` cada archivo se escribe una vez. |
-| Escritura estable | tipos y orden de filas fijados en `_salida_estable()` | Contenido idéntico → bytes idénticos → `upload_folder` omite el archivo. Sin esto, el ahorro de ~40× se pierde por ruido de formato. |
+| Escritura estable | tipos y orden de filas fijados en `_salida_estable()` | Contenido idéntico → bytes idénticos → `upload_folder` omite el archivo. Sin esto, el ahorro de ~23× se pierde por ruido de formato. |
 | Cadencia de captura | workflow `0 5,11,17,23 * * *` UTC (= 00/06/12/18 Colombia) | Balance entre frescura de datos y carga sobre el portal estatal; 4 capturas diarias (el planificador no respeta el minuto). |
 | Memoria persistente | HF = tienda canónica (`data/semana-*.parquet`) | El runner es efímero; `sync_hf --pull` recompone los stores desde lo publicado antes de capturar y `emitir_dataset` lo republica al terminar. |
 | Retención del corpus | acumulación sin purgas (dedupe por vacante nueva) | El crecimiento real = vacantes nuevas; con semanas inmutables, subir deja de costar el tamaño del corpus. |
