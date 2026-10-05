@@ -11,13 +11,16 @@ __pycache__/
 # Secrets (token de Hugging Face)
 .env
 
-# Datos
+# Datos. Los stores son artefactos reconstruibles: la memoria persistente del
+# proyecto es Hugging Face (`sync_hf --pull`), no el disco (ver AGENTS.md).
+# Versionar `data/raw/vacantes.csv` rompía esa invariante —crecía en cada
+# captura local y ensuciaba el working tree—; el directorio queda con un
+# `.gitkeep` para que un clone limpio lo tenga.
 data/snapshots/
-data/raw/spe/
+data/raw/
+!data/raw/.gitkeep
 data/emitido/
 data/duckdb/
-# Estado de la corrida que deja `sync_hf --pull` (se regenera en cada captura).
-data/raw/_publicado.json
 
 # Artefactos analíticos reproducibles
 data/procesados/grafos/*
