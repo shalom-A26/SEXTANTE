@@ -26,25 +26,10 @@ PATRON_ARCHIVOS = "data/*.parquet"
 CLAVE_DEDUPE = "id_vacante"
 
 
-def cargar_entorno_local(raiz: Path | None = None) -> None:
-    """Completa el entorno con un `.env` local si existe, sin imprimirlas.
-
-    Guarda el token de Hugging Face (`HF_TOKEN`) fuera del control de versiones
-    (`.env` está en `.gitignore`). Solo añade claves ausentes: lo que ya esté
-    exportado tiene prioridad. Ningún valor se escribe en el log.
-    """
-    ruta = (raiz or Path(__file__).resolve().parents[2]) / ".env"
-    if not ruta.is_file():
-        return
-    for linea in ruta.read_text(encoding="utf-8").splitlines():
-        linea = linea.strip()
-        if not linea or linea.startswith("#") or "=" not in linea:
-            continue
-        clave, _, valor = linea.partition("=")
-        clave = clave.strip()
-        valor = valor.strip().strip('"').strip("'")
-        if clave and clave not in os.environ:
-            os.environ[clave] = valor
+# El `.env` se carga desde `src/extraccion/base.py` porque lo necesita también
+# el pipeline de captura (`sync_hf --pull`, `emitir_dataset --hf-upload`). Aquí
+# solo se reexporta para no romper las llamadas existentes.
+from src.extraccion.base import cargar_entorno_local  # noqa: E402,F401
 
 
 def _deduplicar(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:

@@ -50,6 +50,9 @@ ARCHIVOS_ESTADO_LEGACY = {
 
 
 def _token(token: str | None) -> str | None:
+    # El `.env` local se carga aquí, no en el import: sin esto una captura
+    # manual iba sin token y el 401 se leía como "el repo no existe".
+    base.cargar_entorno_local()
     return token or os.environ.get("HF_TOKEN")
 
 

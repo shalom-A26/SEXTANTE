@@ -24,6 +24,7 @@ HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.emitir_dataset --hf-upload --
 
 # Restaurar el corpus acumulado desde Hugging Face (memoria persistente).
 # Recompone los stores desde data/semana-*.parquet y deja data/raw/_publicado.json.
+# El token se lee de un `.env` en la raíz (gitignored); también vale inline:
 HF_TOKEN=hf_xxx .venv/bin/python -m src.extraccion.sync_hf --pull --repo pxtron/vacantes-colombia
 
 # Captura manual local (desarrollo; la automática corre en GitHub Actions)
@@ -132,10 +133,14 @@ de 2026 los desvíos van de −3,4 h a +2,6 h, con una ventana ciega de ~8,8 h.
   crecimiento real y aviso si no hubo vacantes nuevas).
 - `scripts/capturar_6h.sh` — captura manual local (pull → SPE → curado → emisión, con `--snapshot`).
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
-- `tests/` — 38 pruebas: emisión, sincronización, migración de layout, store del
-  SPE y SSL, grafo, habilidades y métricas. La emisión y la sincronización no
-  tenían suite; ahora sí.
+- `tests/` — 44 pruebas: emisión, sincronización, migración de layout, store del
+  SPE y SSL, entorno, grafo, habilidades y métricas. La emisión y la
+  sincronización no tenían suite; ahora sí.
 - `src/analisis/` — acceso de solo lectura a los parquet HF y métricas laborales.
+- `HF_TOKEN` se resuelve por `base.cargar_entorno_local()` (en `.env`, gitignored),
+  que se llama desde `sync_hf._token()` y `emitir_dataset.subir_hf()`. No hace
+  falta exportarlo: inline (`HF_TOKEN=hf_x python -m ...`) también funciona y
+  tiene prioridad sobre el archivo.
 - `src/procesamiento/habilidades.py` — vocabulario endógeno (n-gramas + señal ocupacional).
 - `src/grafos/` — tablas bipartitas, similitud, comunidades y transiciones exploratorias.
 - `notebooks/dashboard_metricas.ipynb` / `grafo_habilidades_ocupaciones.ipynb` — narrativas analíticas.

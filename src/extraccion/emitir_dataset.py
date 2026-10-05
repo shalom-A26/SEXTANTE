@@ -331,9 +331,13 @@ def _store_restaurado(ruta_spe: Path = RUTA_PARQUET_SPE, ruta_curado: Path = bas
 
 def subir_hf(dir_ds: Path, repo_id: str, ruta_spe: Path = RUTA_PARQUET_SPE) -> None:
     """Sube el directorio del dataset y migra el layout si hace falta."""
+    base.cargar_entorno_local()
     token = os.environ.get("HF_TOKEN")
     if not token:
-        raise SystemExit("ERROR: define HF_TOKEN (huggingface.co/settings/tokens) para --hf-upload")
+        raise SystemExit(
+            "ERROR: define HF_TOKEN (huggingface.co/settings/tokens) para --hf-upload. "
+            "Puedes ponerlo en un `.env` en la raíz del repo (está gitignored)."
+        )
     from huggingface_hub import HfApi
 
     api = HfApi()

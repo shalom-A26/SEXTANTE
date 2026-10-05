@@ -5,10 +5,12 @@ Concentra:
 - Sesión HTTP con reintentos y respeto a robots/ToS.
 - Guardado incremental sobre data/raw/vacantes.csv con deduplicación
   y estampado de fecha_captura.
+- Carga del `.env` local (`HF_TOKEN`), compartida con src/analisis/.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import time
 import warnings
@@ -42,6 +44,39 @@ def get(url: str, **kwargs) -> requests.Response:
     headers = {"User-Agent": UA}
     headers.update(kwargs.pop("headers", {}) or {})
     return requests.get(url, headers=headers, timeout=30, **kwargs)
+
+
+def cargar_entorno_local(raiz: Path | None = None) -> None:
+    """Completa el entorno con un `.env` local si existe, sin imprimirlo.
+
+    Guarda el token de Hugging Face (`HF_TOKEN`) fuera del control de versiones
+    (`.env` está en `.gitignore`). Solo añade claves ausentes: lo que ya esté
+    exportado tiene prioridad, así que `HF_TOKEN=hf_x python -m ...` manda
+    sobre el archivo. Ningún valor se escribe en el log.
+
+    Vive aquí, y no en `src/analisis/datos_hf.py`, porque lo necesitan tanto el
+    análisis como el pipeline de captura: `sync_hf --pull` y `emitir_dataset
+    --hf-upload` leen `HF_TOKEN` del entorno, y sin esto una captura manual
+   recebía un 401 que se leía como "el repo no existe".
+    """
+    ruta = (raiz or RAIZ) / ".env"
+    if not ruta.is_file():
+        return
+    try:
+        lineas = ruta.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        # Un `.env` ilegible no debe tumbar la captura: se sigue sin token y
+        # quien lo necesite verá el 401 con su causa real.
+        return
+    for linea in lineas:
+        linea = linea.strip()
+        if not linea or linea.startswith("#") or "=" not in linea:
+            continue
+        clave, _, valor = linea.partition("=")
+        clave = clave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        if clave and clave not in os.environ:
+            os.environ[clave] = valor
 
 
 def crear_estructura_datos() -> None:
