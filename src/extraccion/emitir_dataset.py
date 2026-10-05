@@ -49,7 +49,7 @@ import pandas as pd
 from src.extraccion.esquema import COLUMNAS_ESQUEMA
 
 from . import base
-from .portales.spe import RUTA_PARQUET_SPE
+from .portales.spe import RUTA_PARQUET_SPE, contar_filas
 
 RUTA_EMITIDO = base.RUTA_DATOS / "emitido"
 NOMBRE_DATASET = "vacantes-colombia"
@@ -324,7 +324,9 @@ def _store_restaurado(ruta_spe: Path = RUTA_PARQUET_SPE, ruta_curado: Path = bas
     if esperadas is None:
         # No había store del SPE en el repo (migración de un corpus solo curado).
         return ruta_curado.exists() or not base_pub.get("filas_curado")
-    return ruta_spe.exists() and len(pd.read_parquet(ruta_spe, columns=["id_vacante"])) >= int(esperadas)
+    # `contar_filas` y no `pd.read_parquet`: el lector de Arrow queda
+    # vivo hasta el teardown y puede abortar con exit code 134.
+    return ruta_spe.exists() and contar_filas(ruta_spe) >= int(esperadas)
 
 
 def subir_hf(dir_ds: Path, repo_id: str, ruta_spe: Path = RUTA_PARQUET_SPE) -> None:

@@ -198,7 +198,8 @@ SEXTANTE/
 ├── README.md                 # Documentación (español)
 ├── README.en.md              # Documentation (English)
 ├── AGENTS.md                 # Guide for AI agents working in this repo
-├── requirements.txt
+├── requirements.txt          # capture pipeline (pinned)
+├── requirements-notebooks.txt  # analysis and graphs (not used by the cron)
 ├── .github/workflows/
 │   └── captura_6h.yml        # automatic capture every 6 h → Hugging Face
 ├── scripts/
@@ -236,7 +237,8 @@ SEXTANTE/
 ```bash
 # 1. Environment (Python ≥ 3.10; venv created with uv in this setup)
 uv venv                      # or: python -m venv .venv
-uv pip install -r requirements.txt
+uv pip install -r requirements.txt            # capture pipeline (what the cron runs)
+uv pip install -r requirements-notebooks.txt  # + analysis, graphs and notebooks
 
 # 2a. Big SPE corpus (official full export; ~3 requests to the portal)
 .venv/bin/python -m src.extraccion.corpus --fuentes spe            # download export → parquet

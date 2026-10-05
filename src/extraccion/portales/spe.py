@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 import requests
 from requests.exceptions import SSLError
 
@@ -48,22 +49,38 @@ RUTA_PARQUET_SPE = RUTA_SPE / "vacantes_spe.parquet"
 # Intervalo (s) de espera entre reintentos del estado del job de export.
 _POLL_DEMORA = 2.0
 
+# El certificado del SPE tiene la cadena CA incompleta, así que la validación
+# SSL falla de forma sistemática, no intermitente: el poll del export hace ~130
+# peticiones por corrida y cada una repetía el handshake verificado-y-fallido
+# antes de reintentar sin verificar (100-132 avisos, varios minutos perdidos).
+# El primer `SSLError` lo recuerda y el resto de la corrida va directo. La
+# postura no cambia: antes toda petición terminaba igual en `verify=False`.
+_VERIFICAR_SSL = True
+_SSL_AVERGONZADO = (
+    "Validación SSL contra el SPE falló; se sigue sin verificar por el resto "
+    "de la corrida (sitio estatal público, cadena CA incompleta)."
+)
+
 
 def _request(method: str, url: str, **kwargs) -> requests.Response:
-    """GET/POST al SPE con User-Agent del proyecto.
-
-    El certificado del sitio es intermitente (cadena CA local incompleta): se
-    reenvía la petición con `verify=False` solo si la validación SSL falla.
-    """
+    """GET/POST al SPE con User-Agent del proyecto."""
+    global _VERIFICAR_SSL
     headers = {"User-Agent": base.UA}
     headers.update(kwargs.pop("headers", {}) or {})
+    if not _VERIFICAR_SSL:
+        return _request_sin_verificar(method, url, headers, kwargs)
     try:
         return requests.request(method, url, headers=headers, timeout=(30, 300), **kwargs)
     except SSLError:
-        warnings.warn("Validación SSL contra el SPE falló; reintentando sin verificar (sitio estatal público).")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=requests.packages.urllib3.exceptions.InsecureRequestWarning)
-            return requests.request(method, url, headers=headers, timeout=(30, 300), verify=False, **kwargs)
+        _VERIFICAR_SSL = False
+        warnings.warn(_SSL_AVERGONZADO)
+        return _request_sin_verificar(method, url, headers, kwargs)
+
+
+def _request_sin_verificar(method, url, headers, kwargs) -> requests.Response:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        return requests.request(method, url, headers=headers, timeout=(30, 300), verify=False, **kwargs)
 
 
 def _get(url: str, **kwargs) -> requests.Response:
@@ -156,6 +173,27 @@ def exportar_a_canonico(csv: Path, fecha_captura: str | None = None) -> pd.DataF
         }
     )
     return normalizar(can)
+
+
+def contar_filas(ruta: Path) -> int:
+    """Número de filas de un parquet, leyendo solo su footer.
+
+    **No sustituir por `len(pd.read_parquet(ruta, columns=[...]))`.** Eso levanta
+    el escáner thread-pooled de Arrow, y si ese lector llega vivo al apagado del
+    intérprete el proceso muere con `terminate called without an active
+    exception` (SIGABRT, exit code 134). Es la carrera de Arrow #34314: los
+    hilos de E/S de Arrow sobreviven al intérprete y el `ParquetFileReader` se
+    destruye mientras el hilo que lo toca ya se está cancelando
+    (`ParquetFileReader::~ParquetFileReader` → `PyBuffer::~PyBuffer` →
+    `PyGILState_Ensure` → `std::terminate`).
+
+    Ocurrió en la captura de 2026-10-05, donde `corpus.py` contaba las filas
+    nada más terminar de escribir el store y abortaba en el teardown, tirando
+    los ~10 min de la corrida (y con ellos la emisión, que nunca llegó a
+    correr). `read_metadata` no crea esa cadena de destructores y además es
+    ~20x más rápido.
+    """
+    return pq.read_metadata(ruta).num_rows
 
 
 def guardar_parquet(df: pd.DataFrame, ruta: Path = RUTA_PARQUET_SPE) -> int:

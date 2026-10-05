@@ -42,16 +42,37 @@ jobs:
         run: python -m src.extraccion.corpus --fuentes linkedin elempleo
 
       - name: Emit weekly dataset and upload to Hugging Face
+        id: emitir
         run: python -m src.extraccion.emitir_dataset --hf-upload --hf-repo pxtron/vacantes-colombia
 
       - name: Publish run summary
         if: always()
+        env:
+          # Para poder decir QUÉ paso cayó: sin esto el resumen culpaba siempre
+          # a la emisión, aunque la emisión nunca hubiera llegado a correr.
+          STEPS: ${{ toJSON(steps) }}
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
+          import os
           import pathlib
 
           import pandas as pd
+
+          YO = "Publish run summary"
+          EMITIR = "emitir"  # id del paso de emisión (ver el YAML)
+
+          def pasos_caidos():
+              """Pasos con conclusion de fallo, excluyendo este (aún en curso)."""
+              try:
+                  pasos = json.loads(os.environ.get("STEPS", "{}"))
+              except json.JSONDecodeError:
+                  return []
+              return [
+                  nombre
+                  for nombre, paso in pasos.items()
+                  if nombre != YO and paso.get("outcome") not in ("success", "skipped", "")
+              ]
 
           raiz = pathlib.Path.cwd()
           lineas = [f"# Resumen de captura — {pd.Timestamp.now():%Y-%m-%d %H:%M} UTC"]
@@ -104,7 +125,23 @@ jobs:
               )
               lineas.append(f"- Última captura de los datos: {estado.get('captura_mas_reciente')}")
           else:
-              lineas.append("- ⚠️ **No se publicó el dataset**: la emisión falló (ver el paso anterior).")
+              caidos = pasos_caidos()
+              if caidos:
+                  where = ", ".join(f"'{n}'" for n in caidos)
+                  if EMITIR in caidos:
+                      lineas.append(
+                          f"- ⚠️ **No se publicó el dataset**: la emisión falló en el paso {where}."
+                      )
+                  else:
+                      lineas.append(
+                          f"- ⚠️ **No se publicó el dataset**: falló el paso {where} "
+                          "— no se llegó a emitir."
+                      )
+              else:
+                  lineas.append(
+                      "- ⚠️ **No se publicó el dataset**: la emisión corrió pero no dejó "
+                      "`estado.json` (revisa el paso de emisión)."
+                  )
               if base:
                   lineas.append(
                       f"- El corpus acumulado sigue intacto en HF "
