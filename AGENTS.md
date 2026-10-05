@@ -8,7 +8,8 @@ colombiano (vacantes → habilidades, salarios, perfiles, grafos).
 ```bash
 # Entorno
 .venv/bin/python --version        # Python ≥ 3.10 (venv creado con uv)
-uv pip install -r requirements.txt
+uv pip install -r requirements.txt            # pipeline de captura (pineado; lo que corre el cron)
+uv pip install -r requirements-notebooks.txt  # + notebooks, src/analisis, src/grafos
 
 # Extracción de vacantes
 # Corpus curado (El Empleo + LinkedIn) → data/raw/vacantes.csv
@@ -131,8 +132,9 @@ de 2026 los desvíos van de −3,4 h a +2,6 h, con una ventana ciega de ~8,8 h.
   crecimiento real y aviso si no hubo vacantes nuevas).
 - `scripts/capturar_6h.sh` — captura manual local (pull → SPE → curado → emisión, con `--snapshot`).
 - `notebooks/eda_validacion.ipynb` — valida esquema y cobertura del corpus.
-- `tests/` — 30 pruebas: emisión, sincronización, migración de layout, grafo,
-  habilidades y métricas. La emisión y la sincronización no tenían suite; ahora sí.
+- `tests/` — 38 pruebas: emisión, sincronización, migración de layout, store del
+  SPE y SSL, grafo, habilidades y métricas. La emisión y la sincronización no
+  tenían suite; ahora sí.
 - `src/analisis/` — acceso de solo lectura a los parquet HF y métricas laborales.
 - `src/procesamiento/habilidades.py` — vocabulario endógeno (n-gramas + señal ocupacional).
 - `src/grafos/` — tablas bipartitas, similitud, comunidades y transiciones exploratorias.
@@ -161,6 +163,17 @@ de 2026 los desvíos van de −3,4 h a +2,6 h, con una ventana ciega de ~8,8 h.
   modelos salariales.
 - Documentar decisiones que afecten al modelo de dominio en el README o en
   `docs/` (viabilidad, nuevo esquema de columnas). Mantener `requirements.txt` al día.
+- `requirements.txt` está **pineado** y solo lleva lo del pipeline de captura
+  (`src/extraccion` y el workflow). Lo de análisis y grafos quedó en
+  `requirements-notebooks.txt`, sin pinear, para que el cron no instale jupyter
+  ni matplotlib cada 6 h. `pyahocorasick` sigue en el core porque
+  `src/procesamiento/habilidades.py` tiene tests en la suite.
+- `src/extraccion/portales/spe.py` tiene dos cuidados no obvios, ambos con test
+  en `tests/test_spe_store.py`: `contar_filas()` (un `pd.read_parquet` para
+  contar filas puede abortar el proceso con exit 134 al apagar el intérprete,
+  Arrow #34314) y el flag `_VERIFICAR_SSL` (la cadena CA del SPE está
+  incompleta, así que el primer `SSLError` desactiva la verificación por el resto
+  de la corrida).
 
 ## Documentación (bilingüe)
 

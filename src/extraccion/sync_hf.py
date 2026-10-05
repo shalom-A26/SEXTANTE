@@ -36,6 +36,7 @@ from src.extraccion.emitir_dataset import (
     PATRON_SEMANA,
     RUTA_BASE_PUBLICADO,
 )
+from src.extraccion.portales.spe import contar_filas
 
 REPO_HF_DEFECTO = "pxtron/vacantes-colombia"
 
@@ -185,7 +186,8 @@ def _restaurar_legacy(
         print(f"  [sync_hf] restaurado (layout anterior): {ruta} -> {destino}")
 
     if ruta_spe.exists():
-        conteos["filas_spe"] = len(pd.read_parquet(ruta_spe, columns=["id_vacante"]))
+        # `contar_filas` y no `pd.read_parquet`: ver `spe.contar_filas` (exit 134).
+        conteos["filas_spe"] = contar_filas(ruta_spe)
     if ruta_curado.exists():
         conteos["filas_curado"] = len(pd.read_csv(ruta_curado, dtype=str))
     conteos["filas"] = conteos.get("filas_spe", 0) + conteos.get("filas_curado", 0)

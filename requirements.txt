@@ -1,19 +1,23 @@
-pandas
-pyarrow
-huggingface_hub
-numpy
-scikit-learn
-matplotlib
-seaborn
-nltk
-wordcloud
-networkx
-plotly
-pyahocorasick
-jupyter
-requests
+# Dependencias del pipeline de captura (src/extraccion) y del workflow de
+# GitHub Actions. Pineadas a propósito: la captura corre cada 6 h y sin esto cada
+# corrida instala lo último de PyPI.
+#
+# `pyarrow` en particular tiene una carrera al apagar el intérprete (Arrow
+# #34314) que abortaba la corrida con exit code 134. Ver `spe.contar_filas`.
+# `requests` está pineado porque `spe._request` depende de que `SSLError` siga
+# siendo de `requests.exceptions` y no se mueva entre versiones.
+#
+# Actualizar aquí es una decisión consciente, no un `pip install -U`.
+pandas==3.0.6
+pyarrow==25.0.1
+numpy==2.5.3
+huggingface_hub==2.1.1
+requests==2.34.2
+tenacity==9.1.4
+python-jobspy==1.2.0
+# Lo usa src/procesamiento/habilidades.py, que sí tiene tests en la suite.
+pyahocorasick==2.3.1
+
+# Transitivas de python-jobspy y pandas: no se importan en src/, pero hacen
+# falta para resolver el árbol. No quitar.
 beautifulsoup4
-lxml
-tenacity
-python-dateutil
-python-jobspy

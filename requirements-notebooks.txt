@@ -1,0 +1,20 @@
+# Solo para análisis y grafos: notebooks, src/analisis, src/grafos y
+# src/procesamiento. El pipeline de captura NO los necesita, y por eso viven
+# aquí y no en requirements.txt: instalarlos en cada corrida de 6 h solo
+# costaba tiempo y superficie de fallo.
+#
+#   uv pip install -r requirements.txt -r requirements-notebooks.txt
+#
+# Sin pinear a propósito: esto es trabajo interactivo, no un cron.
+-r requirements.txt
+
+scikit-learn
+networkx
+numpy
+matplotlib
+seaborn
+plotly
+wordcloud
+nltk
+jupyter
+lxml

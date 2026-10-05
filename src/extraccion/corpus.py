@@ -109,7 +109,10 @@ def main() -> None:
         if len(df):
             if fuente == "spe":
                 nuevas = spe.guardar_parquet(df)
-                total = len(pd.read_parquet(spe.RUTA_PARQUET_SPE, columns=["id_vacante"]))
+                # Cuenta por metadata y no con `pd.read_parquet`: esta línea es
+                # la última del proceso, y un lector de Arrow vivo aquí
+                # abortaba el teardown con exit code 134. Ver `spe.contar_filas`.
+                total = spe.contar_filas(spe.RUTA_PARQUET_SPE)
                 print(f"  -> {nuevas} nuevas (store: {total} en total) -> {spe.RUTA_PARQUET_SPE}")
                 if args.snapshot:
                     snap = base.guardar_snapshot(spe.RUTA_PARQUET_SPE, prefijo="vacantes_spe", subdir="spe")

@@ -224,7 +224,10 @@ def extraer_relaciones(
     try:
         import ahocorasick
     except ImportError as exc:
-        raise RuntimeError("Falta pyahocorasick; instala requirements.txt") from exc
+        raise RuntimeError(
+            "Falta pyahocorasick; instala requirements-notebooks.txt "
+            "(el pipeline de captura no lo necesita)"
+        ) from exc
 
     automata = ahocorasick.Automaton()
     for termino in terminos:
