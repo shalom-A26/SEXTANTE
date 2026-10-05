@@ -205,8 +205,9 @@ SEXTANTE/
 ├── scripts/
 │   └── capturar_6h.sh        # captura manual local (desarrollo)
 ├── data/
-│   ├── raw/                  # vacantes.csv (corpus curado acumulado, semilla)
-│   │   └── spe/              # vacantes_spe.parquet (corpus grande canónico, semilla)
+│   ├── raw/                  # stores reconstruibles (gitignored; la memoria es HF)
+│   │   ├── vacantes.csv       # corpus curado acumulado (El Empleo + LinkedIn)
+│   │   └── spe/              # vacantes_spe.parquet (corpus grande canónico)
 │   ├── procesados/           # datasets limpios/enriquecidos (uso futuro)
 │   ├── snapshots/            # cortes con marca de tiempo de capturas manuales
 │   └── emitido/              # dataset semanal listo para Hugging Face (parquet + card)
@@ -311,8 +312,8 @@ Cada corrida **añade** filas nuevas y estampa `fecha_captura`: `vacantes.csv` d
 | Log de cada captura automática | Pestaña **Actions** del repo (Summary de cada corrida) |
 | Dataset publicado (memoria y producto) | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) — archivos semanales en [`data/`](https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data) |
 | Conteos de la última corrida | `data/emitido/vacantes-colombia/estado.json` (local) |
-| Corpus curado local (semilla/uso manual) | `data/raw/vacantes.csv` |
-| Corpus grande canónico local (semilla/uso manual) | `data/raw/spe/vacantes_spe.parquet` |
+| Corpus curado local (lo reconstruye `sync_hf --pull`) | `data/raw/vacantes.csv` |
+| Corpus grande canónico local (lo reconstruye `sync_hf --pull`) | `data/raw/spe/vacantes_spe.parquet` |
 | Dataset local para publicar | `data/emitido/vacantes-colombia/` |
 
 ## Ética de datos (eje transversal)

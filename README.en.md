@@ -205,8 +205,9 @@ SEXTANTE/
 ├── scripts/
 │   └── capturar_6h.sh        # manual local capture (development)
 ├── data/
-│   ├── raw/                  # vacantes.csv (curated seed corpus)
-│   │   └── spe/              # vacantes_spe.parquet (canonical big-corpus seed)
+│   ├── raw/                  # rebuildable stores (gitignored; HF is the memory)
+│   │   ├── vacantes.csv       # accumulated curated corpus (El Empleo + LinkedIn)
+│   │   └── spe/              # vacantes_spe.parquet (canonical big corpus)
 │   ├── procesados/           # clean/enriched datasets (future use)
 │   ├── snapshots/            # timestamped cuts of manual captures
 │   └── emitido/              # weekly Hugging Face-ready dataset (parquet + card)
@@ -313,8 +314,8 @@ deduplicates by `url`; the SPE parquet deduplicates by `id_vacante`
 | Log of each automatic capture | **Actions** tab of the repo (run Summary) |
 | Published dataset (memory and product) | [huggingface.co/datasets/pxtron/vacantes-colombia](https://huggingface.co/datasets/pxtron/vacantes-colombia) — weekly files under [`data/`](https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/data) |
 | Counts from the last run | `data/emitido/vacantes-colombia/estado.json` (local) |
-| Local curated corpus (seed/manual) | `data/raw/vacantes.csv` |
-| Local canonical big corpus (seed/manual) | `data/raw/spe/vacantes_spe.parquet` |
+| Local curated corpus (rebuilt by `sync_hf --pull`) | `data/raw/vacantes.csv` |
+| Local canonical big corpus (rebuilt by `sync_hf --pull`) | `data/raw/spe/vacantes_spe.parquet` |
 | Local publish-ready dataset | `data/emitido/vacantes-colombia/` |
 
 ## Data ethics (cross-cutting axis)
