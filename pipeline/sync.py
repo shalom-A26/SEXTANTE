@@ -16,8 +16,8 @@ the total (the total always looks like it grows).
 
 from __future__ import annotations
 
-import argparse
 import json
+import os
 import warnings
 from datetime import datetime, timezone
 
@@ -89,7 +89,7 @@ def pull(dataset: str, repo: str, token: str | None = None) -> dict[str, int]:
     exist yet: that is not an error, it is the empty seed of the dataset.
     """
     env.load_local_env()
-    token = token or __import__("os").environ.get("HF_TOKEN")
+    token = token or os.environ.get("HF_TOKEN")
 
     try:
         paths = _list_partition_files(repo, dataset, token)
@@ -121,18 +121,3 @@ def pull(dataset: str, repo: str, token: str | None = None) -> dict[str, int]:
     write_baseline(counts, repo, "main")
     print(f"[pull] {dataset}: restored {len(frame):,} rows from {len(paths)} file(s)")
     return counts
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Restore the published corpus from Hugging Face")
-    parser.add_argument("--dataset", choices=[*env.DATASETS, "all"], default="all")
-    parser.add_argument("--repo", default="pxtron/vacantes-colombia")
-    args = parser.parse_args()
-
-    datasets = env.DATASETS if args.dataset == "all" else (args.dataset,)
-    for dataset in datasets:
-        pull(dataset, args.repo)
-
-
-if __name__ == "__main__":
-    main()

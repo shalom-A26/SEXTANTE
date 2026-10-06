@@ -36,7 +36,7 @@ import pandas as pd
 import requests
 from requests.exceptions import SSLError
 
-from .. import env
+from .. import env, store
 from ..schema import normalize
 
 API = "https://www.buscadordeempleo.gov.co/backbue/v1"
@@ -179,23 +179,9 @@ def capture(csv: Path | None = None) -> int:
     """
     origin = csv or download_export_csv(LATEST_CSV)
     frame = to_canonical(origin)
-    added = store_append(frame)
-    total = store_count()
+    added = store.append("spe", frame)
+    path = env.store_path("spe")
+    # count_rows and not pd.read_parquet: see store.count_rows (exit 134).
+    total = store.count_rows(path) if path.exists() else 0
     print(f"[spe] {added} new rows (store: {total:,} total)")
     return added
-
-
-# Imported lazily to keep module import cheap and avoid a cycle with env.
-def store_append(frame: pd.DataFrame) -> int:
-    from .. import store
-
-    return store.append("spe", frame)
-
-
-def store_count() -> int:
-    from .. import store
-    from ..env import store_path
-
-    path = store_path("spe")
-    # count_rows and not pd.read_parquet: see store.count_rows (exit 134).
-    return store.count_rows(path) if path.exists() else 0

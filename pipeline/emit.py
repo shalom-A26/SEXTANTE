@@ -24,8 +24,8 @@ card (``README.md``) is.
 
 from __future__ import annotations
 
-import argparse
 import json
+import os
 import shutil
 import warnings
 from datetime import datetime, timezone
@@ -37,7 +37,7 @@ from . import env
 from .schema import COLUMNS
 
 # Dataset directory inside the HF repo (mirrors the local emit dir).
-NOMBRE_DATASET = "vacantes-colombia"
+DATASET_DIR = "vacantes-colombia"
 REPO_DEFAULT = "pxtron/vacantes-colombia"
 
 # Partition file prefixes, per dataset.
@@ -117,7 +117,7 @@ def emit(dataset: str, out_root: Path | None = None) -> Path:
         )
 
     frame = pd.read_parquet(env.store_path(dataset))
-    out = (out_root or env.EMIT_DIR) / NOMBRE_DATASET
+    out = (out_root or env.EMIT_DIR) / DATASET_DIR
     data_dir = out / "data" / dataset
     # Rebuild this dataset's folder from scratch: a stale partition left over
     # from a previous local run would otherwise ride along on upload
@@ -203,8 +203,6 @@ the architecture diagrams and the viability study.
 def upload(out: Path, dataset: str, repo: str = REPO_DEFAULT) -> None:
     """Upload one dataset's files (plus the card); never touches the other."""
     env.load_local_env()
-    import os
-
     token = os.environ.get("HF_TOKEN")
     if not token:
         raise SystemExit(
@@ -226,21 +224,3 @@ def upload(out: Path, dataset: str, repo: str = REPO_DEFAULT) -> None:
         allow_patterns=[f"data/{dataset}/*", "README.md"],
     )
     print(f"[emit] uploaded data/{dataset}/ to https://huggingface.co/datasets/{repo}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Emit the dataset and optionally upload it")
-    parser.add_argument("--dataset", choices=[*env.DATASETS, "all"], default="all")
-    parser.add_argument("--upload", action="store_true", help="upload to Hugging Face (needs HF_TOKEN)")
-    parser.add_argument("--repo", default=REPO_DEFAULT, help=f"target dataset (default: {REPO_DEFAULT})")
-    args = parser.parse_args()
-
-    datasets = env.DATASETS if args.dataset == "all" else (args.dataset,)
-    for dataset in datasets:
-        out = emit(dataset)
-        if args.upload:
-            upload(out, dataset, args.repo)
-
-
-if __name__ == "__main__":
-    main()

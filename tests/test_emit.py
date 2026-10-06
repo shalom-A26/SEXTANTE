@@ -69,7 +69,7 @@ class _DatasetDirTest(unittest.TestCase):
         return emit.emit(dataset)
 
     def hashes(self, dataset: str) -> dict[str, str]:
-        out = env.EMIT_DIR / emit.NOMBRE_DATASET / "data" / dataset
+        out = env.EMIT_DIR / emit.DATASET_DIR / "data" / dataset
         return {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(out.glob("*.parquet"))

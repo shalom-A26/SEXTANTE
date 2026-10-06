@@ -28,6 +28,8 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -37,17 +39,15 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline import emit as emit_mod  # noqa: E402
-from pipeline import env, sync  # noqa: E402
-from pipeline.schema import LEGACY_RENAME  # noqa: E402
+from pipeline import env, store  # noqa: E402
+from pipeline.schema import COLUMNS, LEGACY_RENAME  # noqa: E402
 
 LEGACY_ROOT_PREFIX = "data/semana-"
 LEGACY_STORE_PREFIX = "store/"
-import re  # noqa: E402
-
 LEGACY_SHARD = re.compile(r"^train-\d{5}-of-\d{5}\.parquet$")
 
 
-def _list_files(repo: str, token: str | None) -> list[str]:
+def _list_files(repo: str, token: str | None) -> tuple[list[str], list[str]]:
     from huggingface_hub import HfApi
 
     info = HfApi().repo_info(repo, repo_type="dataset", token=token)
@@ -69,11 +69,10 @@ def _download(repo: str, paths: list[str], token: str | None) -> pd.DataFrame:
         return pd.concat(parts, ignore_index=True)
 
 
-def _to_english(df: pd.DataFrame) -> pd.DataFrame:
+def _to_english(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     out = df.rename(columns=LEGACY_RENAME)
     if "almacen" in out.columns:
         out = out.drop(columns=["almacen"])
-    from pipeline.schema import COLUMNS
 
     missing = [c for c in COLUMNS if c not in out.columns]
     if missing:
@@ -93,8 +92,6 @@ def main() -> int:
     args = parser.parse_args()
 
     env.load_local_env()
-    import os
-
     token = os.environ.get("HF_TOKEN")
     if args.upload and not token:
         print("ERROR: HF_TOKEN is required (or pass --no-upload for a dry run)", file=sys.stderr)
@@ -115,12 +112,10 @@ def main() -> int:
     frame, expected = _to_english(raw)
     print(f"[migrate] renamed columns to English: {len(frame):,} rows ({expected:,} unique ids) ready")
 
-    # Rebuild the local spe store (dedupe by vacancy_id, first wins).
-    from pipeline import store as store_mod
-
-    # Clear any stale local store so the migration is reproducible.
+    # Rebuild the local spe store (dedupe by vacancy_id, first wins),
+    # clearing any stale local store so the migration is reproducible.
     env.store_path("spe").unlink(missing_ok=True)
-    added = store_mod.append("spe", frame)
+    added = store.append("spe", frame)
     print(f"[migrate] local spe store: {added:,} rows")
 
     out = emit_mod.emit("spe")
