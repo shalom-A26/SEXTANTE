@@ -7,7 +7,8 @@ normalizes everything to a canonical 17-column schema, and publishes them as
 Parquet files to a [Hugging Face dataset](https://huggingface.co/datasets/pxtron/vacantes-colombia).
 
 An academic project of the Universidad Tecnológica de Bolívar (data mining &
-analytics).
+analytics). The Hugging Face dataset is **private** (ask the team for
+access); the GitHub repository is public so the Actions cron runs are free.
 
 ## How it works
 
@@ -91,7 +92,8 @@ Full viability study: [`docs/source-viability.md`](docs/source-viability.md).
 
 ## Dataset
 
-`pxtron/vacantes-colombia` (Hugging Face, private):
+`pxtron/vacantes-colombia` (Hugging Face, **private** — ask the team for
+access; publishing it publicly is a separate decision):
 
 ```
 data/

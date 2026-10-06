@@ -68,7 +68,11 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     from .sources import jobspy_source
 
     sites = jobspy_source.ACTIVE_SITES if not args.sites else args.sites.split(",")
-    frame = jobspy_source.scrape(sites=sites, results=args.results, location=args.location)
+    try:
+        frame = jobspy_source.scrape(sites=sites, results=args.results, location=args.location)
+    except RuntimeError as exc:  # every site failed: defined condition, clean exit
+        print(f"[jobspy] {exc}", file=sys.stderr)
+        return 1
     if len(frame) == 0:
         print("[jobspy] no rows returned by any site", file=sys.stderr)
         return 1

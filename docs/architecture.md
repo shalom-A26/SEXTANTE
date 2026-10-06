@@ -34,7 +34,7 @@ SEXTANTE is an ELT pipeline of Colombian job postings:
 3. **Save** in two **append-only local stores** (`data/store/spe.parquet`,
    `data/store/jobspy.parquet`). A vacancy already seen is never rewritten;
    `captured_at` stays fixed at the first observation.
-4. **Persistent memory = Hugging Face**: `pipeline sync pull` recomposes the
+4. **Persistent memory = Hugging Face**: `python -m pipeline pull` recomposes the
    local stores from the published partitions before each run;
    `pipeline emit` publishes them back. The runner is ephemeral, so without
    this step there is no accumulation.
