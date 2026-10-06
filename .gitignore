@@ -8,17 +8,15 @@ __pycache__/
 # OS
 .DS_Store
 
-# Secrets (token de Hugging Face)
+# Secrets (Hugging Face token)
 .env
 
-# Datos
+# Data. The local stores are rebuildable artifacts: the pipeline's persistent
+# memory is Hugging Face (`pipeline pull`), not the disk. Only the directory
+# skeleton is versioned so a clean clone has it.
 data/snapshots/
-data/raw/spe/
+data/raw/
+data/store/
 data/emitido/
-data/duckdb/
-# Estado de la corrida que deja `sync_hf --pull` (se regenera en cada captura).
-data/raw/_publicado.json
-
-# Artefactos analíticos reproducibles
-data/procesados/grafos/*
-!data/procesados/grafos/README.md
+data/_published.json
+!data/.gitkeep
