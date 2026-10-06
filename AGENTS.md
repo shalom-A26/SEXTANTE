@@ -6,6 +6,51 @@ Academic data-mining project: Colombian job-posting capture pipeline
 All code, comments, docs and commit messages are in **English**. The data
 *values* stay in Spanish — they describe Colombian postings.
 
+## Project context
+
+**Full project name**: *SEXTANTE — System for skill extraction, occupational
+segmentation, salary estimation and detection of risk signals in Colombian
+labor demand.* Academic project of the Universidad Tecnológica de Bolívar
+(team of 4; the roster lives in the README's Team section).
+
+**Problem**: real job requirements cannot be inferred from the job title
+alone (`"Analista junior"` hides very different functions); the signal lives
+in the free-text description, which has no uniform taxonomy and inconsistent
+vocabulary. SEXTANTE turns Colombian job postings into structured data and,
+down the line, measures demanded skills, salaries, occupational profiles and
+demand risk signals.
+
+**Final deliverable** (course roadmap): a startup-style MVP web app
+(NextJS + FastAPI) with a landing page and a first-class
+**analytics/visualization dashboard** for candidates, employers and academic
+programs — including a **CV-upload flow** that extracts the candidate's
+profile, scores it against the vacancy corpus with a **similarity
+percentage**, shows the jobs the profile actually matches **with links back
+to the live posting so the person can apply**, and recommends role pivots,
+welcomed niches and skill gaps. CV integration and visualizations are core
+requirements, not extras.
+
+**Stage map**:
+
+| Stage | Content | Status |
+|---|---|---|
+| 1 · Data extraction | SPE + JobSpy → canonical schema → HF | ✅ **this repository** |
+| 2 · Text mining | ESCO skill extraction, duplicate detection by textual similarity, EDA | 🔜 planned |
+| 3 · Representations | TF-IDF, Word2Vec, Spanish transformers, topic modeling | 🔜 planned |
+| 4 · Segmentation | PCA/t-SNE/UMAP + K-Means/hierarchical/DBSCAN | 🔜 planned |
+| 5 · Supervised models | Salary estimation / classification | 🔜 planned |
+| 6 · Skills–occupations graph | Communities, centrality, transition routes | 🔜 planned |
+| 7 · Distributed | Apache Spark if volume justifies it | if needed |
+| 8 · MVP product | Web app + dashboard + CV matching & recommendations | 🔜 planned |
+
+**Operating rule for agents**: this repository currently contains **Stage 1
+(data extraction) only**. There is no analysis, NLP, modeling, graph or web
+code here — and none may be added unless explicitly requested. The
+17-column canonical schema (`pipeline/schema.py`) is the contract all
+future stages consume; treat `data/spe/` + `data/jobspy/` on Hugging Face as
+the corpus those stages will read. When asked for "the project", know that
+the capture pipeline is the foundation, not the whole product.
+
 ## Useful commands
 
 ```bash

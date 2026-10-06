@@ -1,16 +1,91 @@
 # SEXTANTE
 
-**Colombian job-posting capture pipeline.** Extracts vacancies from the
-official Servicio Público de Empleo (SPE) export and from job boards via
-[JobSpy](https://github.com/Bunsly/JobSpy) (LinkedIn, Indeed, Bayt),
-normalizes everything to a canonical 17-column schema, and publishes them as
-Parquet files to a [Hugging Face dataset](https://huggingface.co/datasets/pxtron/vacantes-colombia).
+**System for skill extraction, occupational segmentation, salary estimation
+and detection of risk signals in Colombian labor demand.**
+
+SEXTANTE collects job postings published in Colombia and turns their
+free-text descriptions into structured data. The problem it attacks: real
+job requirements cannot be known from the title alone — *"Analista junior"*
+can mean very different functions and requirements, and the relevant
+information usually lives in the description, written as free text with no
+uniform taxonomy and inconsistent vocabulary. That makes it hard to measure
+which skills the market actually demands, what it pays for them, and how
+occupational profiles relate to each other. From that structured data the
+project identifies skills, analyzes salaries, groups similar occupational
+profiles and detects patterns or anomalies in labor demand.
 
 An academic project of the Universidad Tecnológica de Bolívar (data mining &
-analytics). The Hugging Face dataset is **private** (ask the team for
+analytics course). The Hugging Face dataset is **private** (ask the team for
 access); the GitHub repository is public so the Actions cron runs are free.
 
-## How it works
+## Project scope
+
+> **This repository implements Stage 1 — data extraction — only.** Stages 2
+> to 8 are the roadmap of the course project and are *not built yet*. The
+> canonical 17-column schema is the contract every later stage consumes.
+
+| Stage | Content | Status |
+|---|---|---|
+| **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, hourly + 12h cadence | ✅ **this repository** |
+| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🔜 planned |
+| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🔜 planned |
+| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | 🔜 planned |
+| 5 · Supervised models | Salary estimation and classification tasks | 🔜 planned |
+| 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | 🔜 planned |
+| 7 · Distributed processing | Apache Spark when the data volume justifies it | if needed |
+| **8 · MVP product** | Web application (NextJS + FastAPI) — final course deliverable | 🔜 planned |
+
+### Stage 8 — what the product must do
+
+The final deliverable is a startup-style MVP: a web application with a
+**landing page** and an **analytical dashboard** where findings are
+consulted from three perspectives — **candidates, employers and academic
+programs** — presenting trends, gaps and statistical signals.
+
+- **CV integration** (core, not an extra): a person submits their CV; the
+  product extracts their profile (skills, experience, education) and
+  contrasts it against the vacancy corpus.
+- **Profile–job matching with a similarity percentage**: each person sees
+  the kind of jobs their profile *actually* matches, **ranked by match
+  %** (skills / occupation / seniority).
+- **Every match links back to the original job posting so the person can
+  apply** — the canonical schema's `url` column already carries the source
+  link for this.
+- **Recommendations**: whether the person should pivot to another role, in
+  which niche their profile is well received, and which gaps to close for a
+  target role.
+- **Visualizations and dashboard are first-class requirements**, not a
+  finishing touch: trends, gaps, statistical signals, the graph, and the
+  CV-integration views all rendered in the product.
+
+The CV→vacancy matching and application links build directly on the columns
+Stage 1 already publishes: `url`, `description`, `vacancy_id`.
+
+### Course themes applied
+
+- Exploratory data analysis and variable preparation.
+- Dimensionality reduction (PCA, t-SNE, UMAP).
+- Supervised methods for estimation/classification.
+- Unsupervised clustering (K-Means, hierarchical, DBSCAN).
+- Text mining and NLP: cleaning, normalization, TF-IDF, topic modeling,
+  vector representations.
+- Information extraction from web sources.
+- Network/graph analytics: communities, centrality, path/connection
+  algorithms.
+- Distributed processing with Apache Spark when volume justifies it.
+- Data ethics, privacy, transparency and responsible use as transversal
+  axes.
+
+## Team
+
+| # | Member | Code |
+|---|---|---|
+| 1 | Alejandro Patrón Montero | T00078181 |
+| 2 | Shalom Jhoana Arrieta Marrugo | T00082962 |
+| 3 | Karla Andrea Barraza Torres | T00082880 |
+| 4 | Katlyn Gutiérrez Cardona | T00082259 |
+
+## How it works (Stage 1)
 
 ```
 SPE official export ─┐
