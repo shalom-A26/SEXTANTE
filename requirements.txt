@@ -1,13 +1,13 @@
-# Dependencias del pipeline de captura (src/extraccion) y del workflow de
-# GitHub Actions. Pineadas a propósito: la captura corre cada 6 h y sin esto cada
-# corrida instala lo último de PyPI.
+# Dependencies of the capture pipeline (pipeline/) and of the GitHub Actions
+# workflows. Pinned on purpose: capture runs hourly and without this every
+# run would install whatever is newest on PyPI.
 #
-# `pyarrow` en particular tiene una carrera al apagar el intérprete (Arrow
-# #34314) que abortaba la corrida con exit code 134. Ver `spe.contar_filas`.
-# `requests` está pineado porque `spe._request` depende de que `SSLError` siga
-# siendo de `requests.exceptions` y no se mueva entre versiones.
+# `pyarrow` in particular has a race at interpreter shutdown (Arrow #34314)
+# that aborted a run with exit code 134 — see pipeline.store.count_rows.
+# `requests` is pinned because pipeline.sources.spe depends on SSLError
+# staying in requests.exceptions across versions.
 #
-# Actualizar aquí es una decisión consciente, no un `pip install -U`.
+# Updating here is a deliberate decision, not a `pip install -U`.
 pandas==3.0.6
 pyarrow==25.0.1
 numpy==2.5.3
@@ -15,9 +15,7 @@ huggingface_hub==2.1.1
 requests==2.34.2
 tenacity==9.1.4
 python-jobspy==1.2.0
-# Lo usa src/procesamiento/habilidades.py, que sí tiene tests en la suite.
-pyahocorasick==2.3.1
 
-# Transitivas de python-jobspy y pandas: no se importan en src/, pero hacen
-# falta para resolver el árbol. No quitar.
+# Transitive deps of python-jobspy and pandas: not imported by pipeline/,
+# but needed to resolve the tree. Do not remove.
 beautifulsoup4

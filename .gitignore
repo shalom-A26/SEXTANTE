@@ -8,20 +8,15 @@ __pycache__/
 # OS
 .DS_Store
 
-# Secrets (token de Hugging Face)
+# Secrets (Hugging Face token)
 .env
 
-# Datos. Los stores son artefactos reconstruibles: la memoria persistente del
-# proyecto es Hugging Face (`sync_hf --pull`), no el disco (ver AGENTS.md).
-# Versionar `data/raw/vacantes.csv` rompía esa invariante —crecía en cada
-# captura local y ensuciaba el working tree—; el directorio queda con un
-# `.gitkeep` para que un clone limpio lo tenga.
+# Data. The local stores are rebuildable artifacts: the pipeline's persistent
+# memory is Hugging Face (`pipeline pull`), not the disk. Only the directory
+# skeleton is versioned so a clean clone has it.
 data/snapshots/
 data/raw/
-!data/raw/.gitkeep
+data/store/
 data/emitido/
-data/duckdb/
-
-# Artefactos analíticos reproducibles
-data/procesados/grafos/*
-!data/procesados/grafos/README.md
+data/_published.json
+!data/.gitkeep
