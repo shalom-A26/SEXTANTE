@@ -1,9 +1,13 @@
-name: Hourly job capture (JobSpy) to Hugging Face
+name: JobSpy capture (every 30 min) to Hugging Face
 
 on:
   schedule:
-    # Every hour at :05 UTC = :05 Colombia time (UTC-5).
-    - cron: '5 * * * *'
+    # Every 30 minutes at :17 and :47 UTC = :17 and :47 Colombia time (UTC-5).
+    # Minutes are deliberately off-peak: GitHub delays or drops scheduled
+    # runs at high-load minutes (hour starts like :00/:05), which starved
+    # the original :05 cron. Two runs per hour also shrinks the damage of
+    # a single dropped run.
+    - cron: '17,47 * * * *'
   workflow_dispatch:
 
 # Same group as the SPE workflow: the two must never upload to HF at once.
@@ -53,7 +57,7 @@ jobs:
           import pathlib
 
           root = pathlib.Path.cwd()
-          lines = ["# Hourly capture (JobSpy)"]
+          lines = ["# JobSpy capture (every 30 min)"]
 
           estado_path = root / "data/emitido/vacantes-colombia/estado.json"
           if estado_path.exists():

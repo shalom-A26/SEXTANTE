@@ -83,8 +83,9 @@ environment) runs with `python -m unittest discover -s tests`. There is no
 linter configured.
 
 **Automated capture runs in GitHub Actions**:
-- `.github/workflows/jobspy_hourly.yml` — cron `5 * * * *` UTC (hourly).
-- `.github/workflows/spe_12h.yml` — cron `0 4,16 * * *` UTC (23:00/11:00
+- `.github/workflows/jobspy_capture.yml` — cron `17,47 * * * *` UTC (every
+  30 min; off-peak minutes on purpose, see the workflow comment).
+- `.github/workflows/spe_12h.yml` — cron `23 4,16 * * *` UTC (23:23/11:23
   Colombia time). The SPE export is a ~415 MB snapshot that barely changes
   hour to hour.
 Both workflows share the `hf-upload` concurrency group so they never push to
@@ -167,7 +168,7 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `pipeline/__main__.py` — CLI (`probe | pull | capture | emit`).
 - `scripts/capture.sh` — manual local capture.
 - `scripts/migrate_hf.py` — one-off HF layout migration (already run).
-- `.github/workflows/jobspy_hourly.yml`, `.github/workflows/spe_12h.yml` —
+- `.github/workflows/jobspy_capture.yml`, `.github/workflows/spe_12h.yml` —
   automated capture.
 - `tests/` — 49 tests: stores, emission (incl. byte-stable round-trip), SPE
   source, JobSpy mapping, environment.

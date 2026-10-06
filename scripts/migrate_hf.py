@@ -9,7 +9,7 @@ Old layout (pre 2026-10-05)::
 New layout::
 
     data/spe/week-YYYY-Www.parquet     # English columns, `almacen` dropped
-    data/jobspy/                       # starts empty; hourly pipeline fills it
+    data/jobspy/                       # starts empty; the capture pipeline fills it
 
 Steps (safety first — upload before delete):
 

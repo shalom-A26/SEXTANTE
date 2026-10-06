@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Manual capture (local/dev use; automated capture runs in GitHub Actions:
-# .github/workflows/jobspy_hourly.yml every hour, .github/workflows/spe_12h.yml
+# .github/workflows/jobspy_capture.yml every 30 min, .github/workflows/spe_12h.yml
 # every 12h — both push to Hugging Face).
 #
 # Usage: ./scripts/capture.sh [jobspy|spe|all]   (default: all)

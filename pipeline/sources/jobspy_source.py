@@ -132,7 +132,7 @@ def scrape(
     """General (term-less) search on each site; canonical DataFrame out.
 
     A site that fails is reported and skipped — the run only fails if *every*
-    site fails, so one flaky board doesn't redden the hourly capture while
+    site fails, so one flaky board doesn't redden the capture while
     the others keep feeding the corpus.
     """
     from jobspy import scrape_jobs  # deferred: JobSpy is only needed at capture time

@@ -15,7 +15,7 @@ they render in docs, editors and GitHub.
    - [Level 3 · Components](#level-3--components)
    - [Level 4 · Deployment](#level-4--deployment)
 3. [Data flow and scheduled capture](#data-flow-and-scheduled-capture)
-4. [Sequence: hourly JobSpy capture](#sequence-hourly-jobspy-capture)
+4. [Sequence: JobSpy capture](#sequence-jobspy-capture)
 5. [Sequence: SPE export](#sequence-spe-export)
 6. [Data model](#data-model)
 7. [Design decisions](#design-decisions)
@@ -38,18 +38,21 @@ SEXTANTE is an ELT pipeline of Colombian job postings:
    local stores from the published partitions before each run;
    `pipeline emit` publishes them back. The runner is ephemeral, so without
    this step there is no accumulation.
-5. **Capture is automated**: hourly for JobSpy
-   (`.github/workflows/jobspy_hourly.yml`, cron `5 * * * *` UTC) and every
-   12 hours for SPE (`.github/workflows/spe_12h.yml`, cron `0 4,16 * * *`
-   UTC). Both share the `hf-upload` concurrency group. There is no local
+5. **Capture is automated**: every 30 minutes for JobSpy
+   (`.github/workflows/jobspy_capture.yml`, cron `17,47 * * * *` UTC) and
+   twice a day for SPE (`.github/workflows/spe_12h.yml`, cron `23 4,16 * * *`
+   UTC). Both share the `hf-upload` concurrency group. Cron minutes are
+   deliberately off-peak: GitHub delays or drops scheduled runs at
+   high-load minutes like :00/:05. There is no local
    cron; `scripts/capture.sh` is the manual development entry point.
 
 **Why two partition grains.** The SPE export is a full snapshot of a portal
 that changes slowly: weekly files keep the number of published files low and
-each closed week is immutable. JobSpy runs hourly and surfaces new postings
-the same day: daily files give an analysis-friendly time series (one row per
-capture day) without creating 24 files per day that the same run keeps
-rewriting. In both cases only the *current* file changes between runs.
+each closed week is immutable. JobSpy runs every 30 minutes and surfaces new
+postings the same day: daily files give an analysis-friendly time series (one
+row per capture day) without creating dozens of files per day that the same
+run keeps rewriting. In both cases only the *current* file changes between
+runs.
 
 **Upload economics.** Rows are frozen (`keep="first"`), so closed files
 never change; `emit._stable()` guarantees identical content produces
@@ -101,8 +104,8 @@ Decomposition into executable containers and data stores.
 ```mermaid
 flowchart TB
     subgraph RUNNER["GitHub Actions · Ubuntu runner (ephemeral, per run)"]
-        wf_h["jobspy_hourly.yml<br/>cron 5 * * * * UTC"]
-        wf_s["spe_12h.yml<br/>cron 0 4,16 * * * UTC"]
+        wf_h["jobspy_capture.yml<br/>cron 17,47 * * * * UTC"]
+        wf_s["spe_12h.yml<br/>cron 23 4,16 * * * UTC"]
         pull["pipeline pull<br/>restore stores from HF"]
         cap["pipeline capture<br/>spe | jobspy"]
         emit["pipeline emit<br/>partition + upload"]
@@ -193,7 +196,7 @@ flowchart TB
 flowchart LR
     subgraph GH["GitHub"]
         repo["shalom-A26/SEXTANTE<br/>(public)"]
-        actions["Actions runners<br/>hourly + 12h"]
+        actions["Actions runners<br/>30-min + 12h"]
     end
 
     subgraph HF["Hugging Face"]
@@ -218,7 +221,7 @@ flowchart TB
     start(["cron fires"]) --> pull["pipeline pull<br/>restore store(s) from HF<br/>write data/_published.json baseline"]
     pull --> which{"which workflow?"}
 
-    which -->|"hourly"| js["capture --source jobspy<br/>general search per active site<br/>→ append, dedupe by url"]
+    which -->|"30 min"| js["capture --source jobspy<br/>general search per active site<br/>→ append, dedupe by url"]
     which -->|"12h"| sp["capture --source spe<br/>official CSV export → append,<br/>dedupe by vacancy_id"]
 
     js --> emitj["emit --dataset jobspy<br/>data/jobspy/day-YYYY-MM-DD.parquet"]
@@ -247,7 +250,7 @@ Failure behavior:
 
 ---
 
-## Sequence: hourly JobSpy capture
+## Sequence: JobSpy capture
 
 ```mermaid
 sequenceDiagram
@@ -346,7 +349,7 @@ data/
 │   └── undated.parquet          # rows without a parseable captured_at
 └── jobspy/
     ├── day-2026-10-04.parquet   # closed day: immutable
-    ├── day-2026-10-05.parquet   # current day (rewritten hourly)
+    ├── day-2026-10-05.parquet   # current day (rewritten every capture run)
     └── undated.parquet
 ```
 

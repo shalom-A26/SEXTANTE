@@ -1,5 +1,5 @@
 # Dependencies of the capture pipeline (pipeline/) and of the GitHub Actions
-# workflows. Pinned on purpose: capture runs hourly and without this every
+# workflows. Pinned on purpose: capture runs every 30 min and without this every
 # run would install whatever is newest on PyPI.
 #
 # `pyarrow` in particular has a race at interpreter shutdown (Arrow #34314)

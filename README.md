@@ -26,7 +26,7 @@ access); the GitHub repository is public so the Actions cron runs are free.
 
 | Stage | Content | Status |
 |---|---|---|
-| **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, hourly + 12h cadence | ✅ **this repository** |
+| **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, 30-min + 12h cadence | ✅ **this repository** |
 | 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🔜 planned |
 | 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🔜 planned |
 | 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | 🔜 planned |
@@ -116,8 +116,11 @@ corpus), captures, then emits and uploads.
 
 | Workflow | Schedule (UTC) | Source |
 |---|---|---|
-| `.github/workflows/jobspy_hourly.yml` | every hour at :05 | JobSpy boards |
-| `.github/workflows/spe_12h.yml` | 04:00 & 16:00 (23:00 & 11:00 Colombia) | SPE official export |
+| `.github/workflows/jobspy_capture.yml` | every 30 min at :17 & :47 | JobSpy boards |
+| `.github/workflows/spe_12h.yml` | 04:23 & 16:23 (23:23 & 11:23 Colombia) | SPE official export |
+
+The minutes (:17, :47, :23) are deliberately off-peak: GitHub delays or
+drops scheduled runs at high-load minutes such as :00 and :05.
 
 The two workflows share a concurrency group so they never upload to Hugging
 Face at the same time.
@@ -176,7 +179,7 @@ data/
 │   ├── week-2026-W38.parquet   # immutable once the week closes
 │   └── ...
 └── jobspy/
-    ├── day-2026-10-05.parquet  # rewritten hourly while today lasts
+    ├── day-2026-10-05.parquet  # rewritten on every capture run while today lasts
     └── ...
 ```
 

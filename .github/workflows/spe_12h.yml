@@ -2,13 +2,15 @@ name: SPE capture (every 12h) to Hugging Face
 
 on:
   schedule:
-    # 04:00 and 16:00 UTC = 23:00 and 11:00 Colombia time (UTC-5).
+    # 04:23 and 16:23 UTC = 23:23 and 11:23 Colombia time (UTC-5).
     # The SPE export is a ~415 MB official snapshot that barely changes
-    # hour to hour, so twice a day is enough.
-    - cron: '0 4,16 * * *'
+    # hour to hour, so twice a day is enough. The :23 minute is off-peak:
+    # GitHub delays or drops scheduled runs at high-load minutes like :00,
+    # which delayed the original 04:00 cron by hours.
+    - cron: '23 4,16 * * *'
   workflow_dispatch:
 
-# Same group as the hourly JobSpy workflow: never upload to HF concurrently.
+# Same group as the 30-min JobSpy workflow: never upload to HF concurrently.
 concurrency:
   group: hf-upload
   cancel-in-progress: false
