@@ -1,0 +1,5 @@
+-r requirements-notebook-experiments.txt
+ruff>=0.14,<1.0
+nbclient>=0.10,<1.0
+nbformat>=5.10,<6.0
+notebook>=7.4,<8.0

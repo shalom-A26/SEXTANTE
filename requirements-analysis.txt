@@ -1,0 +1,6 @@
+# Install the capture dependencies and the batch analysis stack together.
+# Scientific package versions are recorded in each run manifest.
+-r requirements.txt
+scikit-learn>=1.4,<2.0
+datasketch>=1.6.5,<2.0
+jupyterlab>=4.2,<5.0
