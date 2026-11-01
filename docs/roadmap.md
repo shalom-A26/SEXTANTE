@@ -31,16 +31,21 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 |---|---|---|---|---|---|---|---|
 | 3,000 | 6,000 | 1 min 16 s | 7.7 GB | 19,470 | 0.70 M (1.06 M) COP | 0.80 (0.49) | 0.18 |
 | 30,000 | 33,039 | 4 min 00 s | 8.0 GB | 83,729 | 0.45 M (0.66 M) COP | 0.84 (0.60) | 0.15 |
+| **full (published)** | **481,597** | **29 min 51 s** | **13.0 GB** | **1,195,358** | **0.39 M (0.61 M) COP** | **0.87 (0.61)** | **0.13** |
 
-Peak memory barely grows with rows: it is dominated by fixed loading cost,
-so the full corpus is expected to fit the runner. Silhouette on the full
+First published run: `derived/runs/20261101T170836441392Z-cd50c976`
+(corpus revision `cd50c976`, 2026-11-01), `derived/latest.json` points to it.
+Salary regression median absolute error is 9%; 372,660 postings have a
+usable salary. Peak memory (13.0 GB) uses ~80% of the 16 GB runner: the
+corpus grows daily, so reduce memory (stream partitions, drop descriptions
+after vectorizing, cap bigram vocabulary) before scheduling the run. Silhouette on the full
 sparse TF-IDF is ~0.01 (normal for high-dimensional sparse text); segment
 quality must be judged by reading segment terms and manual review.
 
 ## Pending (in order)
 
-1. **Real corpus run** — trigger **Actions → Analytics run (manual)** (ESCO
-   comes from the `taxonomy-esco-v1.2.1` release). The step summary reports duration
+1. ~~**Real corpus run**~~ — done 2026-11-01 (see table above). Re-run with
+   **Actions → Analytics run (manual)** after tuning. The step summary reports duration
    and peak memory: copy them here. (Locally:
    `HF_TOKEN=... python -m sextante_analysis run --esco-csv skills_es.csv --upload`.)
 2. **Tune on real data** — check `supervised_metrics.json` beats baselines,
