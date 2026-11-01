@@ -25,6 +25,18 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 - ESCO published as GitHub release `taxonomy-esco-v1.2.1`; the analytics
   workflow downloads and verifies it, so the real run is unblocked.
 
+### Trial runs on the real corpus (GitHub runner, `upload=false`)
+
+| Limit/dataset | Rows | Wall time | Peak RSS | Skill mentions | Salary MAE (baseline) | Band accuracy (baseline) | K-Means silhouette (SVD-50 sample) |
+|---|---|---|---|---|---|---|---|
+| 3,000 | 6,000 | 1 min 16 s | 7.7 GB | 19,470 | 0.70 M (1.06 M) COP | 0.80 (0.49) | 0.18 |
+| 30,000 | 33,039 | 4 min 00 s | 8.0 GB | 83,729 | 0.45 M (0.66 M) COP | 0.84 (0.60) | 0.15 |
+
+Peak memory barely grows with rows: it is dominated by fixed loading cost,
+so the full corpus is expected to fit the runner. Silhouette on the full
+sparse TF-IDF is ~0.01 (normal for high-dimensional sparse text); segment
+quality must be judged by reading segment terms and manual review.
+
 ## Pending (in order)
 
 1. **Real corpus run** — trigger **Actions → Analytics run (manual)** (ESCO
