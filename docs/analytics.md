@@ -57,6 +57,19 @@ unless `SEXTANTE_USE_HF=1` is set:
   --output-dir /tmp/sextante-notebook-run notebooks/01_text_mining_and_segments.ipynb
 ```
 
+### Running on GitHub Actions
+
+`.github/workflows/analytics.yml` (manual, `workflow_dispatch`) runs the same
+command on a GitHub runner with the repository's `HF_TOKEN` secret and
+reports wall time and peak memory in the step summary. Upload the ESCO CSV
+once to the dataset (default path `taxonomy/esco-v1.2.1/skills_es.csv`):
+
+```bash
+huggingface-cli upload pxtron/vacantes-colombia skills_es.csv \
+  taxonomy/esco-v1.2.1/skills_es.csv --repo-type dataset
+gh workflow run analytics.yml            # or: Actions tab → Run workflow
+```
+
 ## Batch behavior and outputs
 
 The CLI reads all SPE and JobSpy Parquet partitions from one repository
@@ -79,6 +92,12 @@ Each run includes:
 | `segment_projection.parquet` | Two-dimensional TruncatedSVD coordinates (sparse PCA approximation) and group ID |
 | `tfidf_matrix.npz`, `tfidf_vocabulary.json`, `tfidf_idf.npy` | TF-IDF representation and vocabulary information for later consumers |
 | `sentence_embeddings.npy` | Optional normalized multilingual embeddings |
+| `postings.parquet`, `tfidf_vectorizer.joblib` | Posting metadata row-aligned with the TF-IDF matrix (no description) and the fitted vectorizer, used by the API to score CVs |
+| `clustering_comparison.json`, `segment_projection_tsne.parquet` | Stage 4: K-Means vs Ward hierarchical vs DBSCAN on a 3,000-row SVD-50 sample (silhouette, noise, ARI vs published K-Means) and a t-SNE projection |
+| `supervised_metrics.json`, `salary_estimates.parquet`, `salary_model.joblib` | Stage 5: Ridge regression on log monthly salary and a salary-tertile classifier, K-fold metrics next to naive baselines; per-posting estimates |
+| `segment_skills.parquet` | Share and lift of each ESCO skill inside each segment |
+| `skill_graph_nodes.parquet`, `skill_graph_edges.parquet`, `graph_metrics.json` | Stage 6: skill co-occurrence graph (top 400 skills, edges ≥ 2 shared postings), Louvain communities, PageRank, sampled betweenness |
+| `segment_transitions.parquet` | Segment graph (3 nearest neighbours by skill-profile cosine) and all-pairs shortest transition routes |
 
 TF-IDF and NMF use title plus description. K-Means is seeded and its
 cosine silhouette is computed on at most 5,000 evenly selected rows. The
@@ -87,6 +106,35 @@ bounded candidate set (up to 20 candidates per posting), followed by exact
 word n-gram TF-IDF cosine similarity. The default review threshold is 0.90;
 pair generation is capped at 500,000 pairs per run.
 This approximation can miss pairs and its output requires human review.
+
+## Stages 5 and 6
+
+**Salary models.** The target is the midpoint of `salary_min`/`salary_max`,
+kept only inside 500,000–60,000,000 COP/month (outside that range values are
+parsing artifacts). Features are the run's TF-IDF plus one-hot `source`,
+`department`, `contract_type`, `work_modality` and `education_level`.
+`Ridge` is fitted on log salary; `LogisticRegression` predicts the salary
+tertile (bajo/medio/alto). Both report K-fold metrics next to a naive
+baseline (median / majority class) — read them together. Fewer than 30
+labeled postings skip the stage with a reason in the manifest.
+
+**Graph.** Skills are linked when they appear in the same posting; Louvain
+(seed 42) finds communities and PageRank/betweenness rank central skills.
+Segments are linked to their three most similar segments by skill profile;
+shortest paths on `1 − similarity` are the transition routes that the CV
+flow shows as "pivots".
+
+## Demo run and manual validation
+
+`python -m sextante_analysis demo` generates a synthetic corpus (flagged as
+`synthetic-demo` in the manifest, never uploaded) and runs every stage, so
+the API and web app work in a clean clone.
+
+`python -m sextante_analysis review <run_dir>` writes review CSVs (ESCO
+mentions, duplicate pairs, segment assignments) with an empty `is_correct`
+column; reviewers open the `url` and fill it (`sí`/`no`).
+`python -m sextante_analysis evaluate <run_dir>/review` reports precision
+with a Wilson 95% interval.
 
 ## Current limitations
 
@@ -99,9 +147,10 @@ This approximation can miss pairs and its output requires human review.
 - The first version recomputes one full snapshot in memory. Measure peak
   memory and duration on the private corpus before adding a schedule or
   incremental feature store.
-- Word2Vec, t-SNE, UMAP, hierarchical clustering, and DBSCAN are limited to
-  small notebook comparisons. The batch contract uses the smaller
-  reproducible baseline until corpus evaluation supports more methods.
-- The batch command is the backend foundation. It does not expose an API or
-  dashboard yet.
+- Word2Vec and UMAP remain notebook-only. Hierarchical clustering, DBSCAN and
+  t-SNE run in batch on a bounded sample for comparison; K-Means stays the
+  published segmentation.
+- Salary models only see postings that publish a salary (mostly SPE); their
+  estimates for other sources are extrapolations.
+- The API and web app consume these artifacts; see [mvp.md](mvp.md).
 

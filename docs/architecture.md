@@ -214,6 +214,26 @@ The local machine is optional: it runs the same CLI manually
 
 ---
 
+### Analytics and MVP containers
+
+```mermaid
+flowchart LR
+    hub["HF Hub<br/>data/spe · data/jobspy"]
+    batch["sextante_analysis run<br/>(manual, pinned revision)"]
+    derived["HF Hub<br/>derived/runs/&lt;id&gt; · latest.json"]
+    api["sextante_api<br/>FastAPI (in-memory run)"]
+    web["web/<br/>Next.js dashboard + CV"]
+    user(("Candidate / employer /<br/>academic program"))
+
+    hub --> batch --> derived --> api
+    web -->|"/api/dashboard, /api/cv/match"| api
+    user --> web
+    web -.->|"apply link (url)"| sourcejob["Original posting"]
+```
+
+The CV travels only in the request to `/api/cv/match`; nothing is stored.
+Details: [analytics.md](analytics.md), [mvp.md](mvp.md).
+
 ## Data flow and scheduled capture
 
 ```mermaid
@@ -355,6 +375,20 @@ data/
 
 Plus a static `README.md` (dataset card; identical bytes every run, uploaded
 once) and, locally only, `estado.json` (run state, never uploaded).
+
+The batch analytics (`python -m sextante_analysis run --upload`, run
+manually) writes to a separate prefix of the same dataset and never touches
+`data/`:
+
+```
+derived/
+├── runs/<run_id>/     # manifest.json, eda.json, skill_mentions.parquet,
+│                      # duplicate_candidates.parquet, topics, segments, TF-IDF
+└── latest.json        # pointer, updated only after a complete run upload
+```
+
+The capture workflows upload only `data/spe/`, `data/jobspy/` and the card,
+so they cannot overwrite derived outputs. See [analytics.md](analytics.md).
 
 ### Invariants
 

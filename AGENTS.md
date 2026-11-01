@@ -35,17 +35,21 @@ requirements, not extras.
 | Stage | Content | Status |
 |---|---|---|
 | 1 · Data extraction | SPE + JobSpy → canonical schema → HF | ✅ **this repository** |
-| 2 · Text mining | ESCO skill extraction, duplicate detection by textual similarity, EDA | 🔜 planned |
-| 3 · Representations | TF-IDF, Word2Vec, Spanish transformers, topic modeling | 🔜 planned |
-| 4 · Segmentation | PCA/t-SNE/UMAP + K-Means/hierarchical/DBSCAN | 🔜 planned |
-| 5 · Supervised models | Salary estimation / classification | 🔜 planned |
-| 6 · Skills–occupations graph | Communities, centrality, transition routes | 🔜 planned |
-| 7 · Distributed | Apache Spark if volume justifies it | if needed |
-| 8 · MVP product | Web app + dashboard + CV matching & recommendations | 🔜 planned |
+| 2 · Text mining | ESCO skill extraction, duplicate detection by textual similarity, EDA | ✅ `sextante_analysis/` (validation pending) |
+| 3 · Representations | TF-IDF, Word2Vec, Spanish transformers, topic modeling | 🟡 baseline (TF-IDF/NMF; embeddings optional) |
+| 4 · Segmentation | PCA/t-SNE/UMAP + K-Means/hierarchical/DBSCAN | 🟡 baseline (SVD + K-Means; others notebook-only) |
+| 5 · Supervised models | Salary estimation / classification | ✅ `supervised.py` |
+| 6 · Skills–occupations graph | Communities, centrality, transition routes | ✅ `graph.py` |
+| 7 · Distributed | Apache Spark if volume justifies it | ⏸ not needed so far |
+| 8 · MVP product | Web app + dashboard + CV matching & recommendations | ✅ `sextante_api/` + `web/` (not deployed) |
 
-**Operating rule for agents**: this repository currently contains **Stage 1
-(data extraction) only**. There is no analysis, NLP, modeling, graph or web
-code here — and none may be added unless explicitly requested. The
+**Operating rule for agents**: the repository contains all stages:
+capture (`pipeline/`), batch analytics for Stages 2–6 (`sextante_analysis/`),
+the FastAPI backend (`sextante_api/`) and the Next.js web app (`web/`).
+Analytics reads the published corpus and writes only to `derived/` on HF; it
+never edits or republishes source rows. The API only reads a run and never
+stores uploaded CVs. Open work is tracked in `docs/roadmap.md` — keep it
+current when you finish or discover a task. The
 17-column canonical schema (`pipeline/schema.py`) is the contract all
 future stages consume; treat `data/spe/` + `data/jobspy/` on Hugging Face as
 the corpus those stages will read. When asked for "the project", know that
@@ -70,8 +74,18 @@ uv pip install -r requirements.txt            # capture pipeline (pinned; what C
 # Manual local capture (dev; automation runs in GitHub Actions)
 ./scripts/capture.sh [jobspy|spe|all]
 
-# Tests
+# Analytics + MVP
+uv pip install -r requirements-api.txt        # analysis + API stack
+.venv/bin/python -m sextante_analysis demo    # synthetic run, no HF needed
+.venv/bin/python -m sextante_analysis run --esco-csv skills_es.csv [--upload]
+.venv/bin/python -m sextante_analysis review <run_dir>    # manual-review CSVs
+.venv/bin/python -m sextante_analysis evaluate <run_dir>/review
+.venv/bin/uvicorn sextante_api.main:app --port 8000
+(cd web && npm install && npm run dev)        # http://localhost:3000
+
+# Tests (analysis/API tests need requirements-api.txt) + lint
 python -m unittest discover -s tests
+ruff check
 
 # One-off: migrate the HF dataset to the data/spe/ + data/jobspy/ layout
 # (already run on 2026-10-05; kept for reference)
@@ -170,8 +184,30 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `scripts/migrate_hf.py` — one-off HF layout migration (already run).
 - `.github/workflows/jobspy_capture.yml`, `.github/workflows/spe_12h.yml` —
   automated capture.
-- `tests/` — 49 tests: stores, emission (incl. byte-stable round-trip), SPE
-  source, JobSpy mapping, environment.
+- `sextante_analysis/` — offline batch analytics (`python -m sextante_analysis
+  run --esco-csv ...`): revision-pinned corpus load (`corpus.py`), EDA
+  (`eda.py`), ESCO exact matching (`taxonomy.py`), duplicate candidates
+  (`duplicates.py`), TF-IDF/NMF/K-Means/SVD (`features.py`), clustering
+  comparison + t-SNE (`comparison.py`), salary models (`supervised.py`),
+  skills graph and transition routes (`graph.py`), manual validation
+  (`validation.py`), synthetic demo (`demo.py`), orchestration `build_run()`
+  and upload to `derived/runs/<run_id>/` (`run.py`, `artifacts.py`).
+- `sextante_api/` — FastAPI: run loading (`data.py`), CV text extraction in
+  memory (`cv.py`), dashboard aggregates and CV matching (`insights.py`),
+  app (`main.py`).
+- `web/` — Next.js 16 app: landing, `/dashboard` (candidates, employers,
+  academic programs, market map), `/cv` (upload, matches, niches, pivots).
+- `notebooks/01_text_mining_and_segments.ipynb` — course demo (synthetic data
+  by default).
+- `.github/workflows/tests.yml` — unittest + ruff on push/PR.
+- `.github/workflows/analytics.yml` — manual full analytics run on a runner
+  (ESCO CSV read from the HF dataset; shares the `hf-upload` group).
+- `Dockerfile` — API image (HF latest run, or synthetic demo).
+- `tests/` — 80 tests: stores, emission (incl. byte-stable round-trip), SPE
+  source, JobSpy mapping, environment, analytics, stages 4–6, API.
+- `docs/analytics.md` — analytics setup, artifacts, limitations.
+- `docs/mvp.md` — API, CV matching method, web app.
+- `docs/roadmap.md` — done / pending work.
 - `docs/architecture.md` — C4 model, all diagrams in Mermaid.
 - `docs/source-viability.md` — source study, probe results.
 

@@ -29,9 +29,34 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="publish under derived/runs/ in the same private HF dataset",
     )
+    demo = subparsers.add_parser("demo", help="run every stage on a synthetic corpus")
+    demo.add_argument("--output", default="data/analysis/runs")
+    demo.add_argument("--rows", type=int, default=600)
+    review = subparsers.add_parser("review", help="export manual-review CSV samples of a run")
+    review.add_argument("run_dir")
+    evaluate = subparsers.add_parser("evaluate", help="score filled manual-review CSVs")
+    evaluate.add_argument("review_dir")
     args = parser.parse_args(argv)
+    if args.command == "review":
+        from .validation import export_review_samples
+
+        for path in export_review_samples(args.run_dir):
+            print(f"[review] {path}")
+        return 0
+    if args.command == "evaluate":
+        import json
+
+        from .validation import evaluate_reviews
+
+        print(json.dumps(evaluate_reviews(args.review_dir), indent=2))
+        return 0
     if sys.version_info < (3, 12):
         parser.error("SEXTANTE analytics requires Python 3.12 or newer")
+    if args.command == "demo":
+        from .demo import run_demo
+
+        print(f"[analysis] synthetic demo written to {run_demo(args.output, args.rows)}")
+        return 0
     try:
         from .run import run_analysis
 

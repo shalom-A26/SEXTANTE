@@ -20,20 +20,25 @@ access); the GitHub repository is public so the Actions cron runs are free.
 
 ## Project scope
 
-> **This repository implements Stage 1 — data extraction — only.** Stages 2
-> to 8 are the roadmap of the course project and are *not built yet*. The
-> canonical 17-column schema is the contract every later stage consumes.
+> **This repository implements the full pipeline end to end**: Stage 1
+> capture (`pipeline/`), batch analytics for Stages 2–6
+> (`sextante_analysis/`, see [`docs/analytics.md`](docs/analytics.md)) and the
+> Stage 8 MVP — FastAPI backend (`sextante_api/`) and Next.js web app
+> (`web/`), see [`docs/mvp.md`](docs/mvp.md). What is still pending (a full
+> run on the real corpus, manual validation, deployment) is tracked in
+> [`docs/roadmap.md`](docs/roadmap.md). The canonical 17-column schema is the
+> contract every later stage consumes.
 
 | Stage | Content | Status |
 |---|---|---|
 | **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, 30-min + 12h cadence | ✅ **this repository** |
-| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🔜 planned |
-| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🔜 planned |
-| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | 🔜 planned |
-| 5 · Supervised models | Salary estimation and classification tasks | 🔜 planned |
-| 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | 🔜 planned |
-| 7 · Distributed processing | Apache Spark when the data volume justifies it | if needed |
-| **8 · MVP product** | Web application (NextJS + FastAPI) — final course deliverable | 🔜 planned |
+| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`sextante_analysis/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
+| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🟡 baseline (TF-IDF + NMF in batch; optional multilingual embeddings; Word2Vec only in the notebook) |
+| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | ✅ K-Means published; hierarchical/DBSCAN + t-SNE compared in batch (UMAP notebook-only) |
+| 5 · Supervised models | Salary estimation and classification tasks | ✅ Ridge salary regression + salary-band classifier, cross-validated against naive baselines |
+| 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | ✅ skill co-occurrence graph (Louvain, PageRank, betweenness) + segment transition routes |
+| 7 · Distributed processing | Apache Spark when the data volume justifies it | ⏸ not needed so far (see roadmap) |
+| **8 · MVP product** | Web application (NextJS + FastAPI) — final course deliverable | ✅ built and tested locally on a demo run; not deployed yet |
 
 ### Stage 8 — what the product must do
 
@@ -148,6 +153,21 @@ Or use the manual wrapper: `./scripts/capture.sh [jobspy|spe|all]`.
 python -m unittest discover -s tests
 ```
 
+The analysis tests need `requirements-analysis.txt`; CI runs the full suite
+plus `ruff check` on every push and pull request (`.github/workflows/tests.yml`).
+
+### Analytics and MVP (quick start, no token needed)
+
+```bash
+uv pip install -r requirements-api.txt
+python -m sextante_analysis demo                 # synthetic run → data/analysis/runs/
+uvicorn sextante_api.main:app --port 8000        # API on the newest run
+cd web && npm install && npm run dev             # web app on http://localhost:3000
+```
+
+Real corpus: `python -m sextante_analysis run --esco-csv skills_es.csv [--upload]`
+(see [`docs/analytics.md`](docs/analytics.md)).
+
 ### Token
 
 Uploads need an `HF_TOKEN` (write scope). Put it in a `.env` at the repo
@@ -202,5 +222,10 @@ data/
   flows, sequences, data model.
 - [`docs/source-viability.md`](docs/source-viability.md) — source study and
   probe results.
+- [`docs/analytics.md`](docs/analytics.md) — batch analytics (Stages 2–6):
+  setup, ESCO taxonomy, derived artifacts, models, graph, validation.
+- [`docs/mvp.md`](docs/mvp.md) — Stage 8: API endpoints, CV matching method,
+  web app, running locally and deploying.
+- [`docs/roadmap.md`](docs/roadmap.md) — what is done and what is left.
 - [`AGENTS.md`](AGENTS.md) — working agreements for AI agents (commands,
   invariants, hard rules).
