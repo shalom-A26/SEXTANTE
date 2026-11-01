@@ -20,3 +20,12 @@ data/store/
 data/emitido/
 data/_published.json
 !data/.gitkeep
+
+# Analytics runs (rebuildable; published under derived/ on HF)
+data/analysis/
+
+# Web app
+web/node_modules/
+web/.next/
+web/next-env.d.ts
+web/.env*.local

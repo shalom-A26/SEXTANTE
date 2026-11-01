@@ -137,3 +137,24 @@ def extract_skills(frame: pd.DataFrame, matcher: EscoMatcher) -> pd.DataFrame:
     return pd.DataFrame(output, columns=[
         "vacancy_id", "source", "url", "esco_uri", "skill_label", "matched_text"
     ])
+
+
+def matcher_from_mentions(mentions: pd.DataFrame) -> EscoMatcher:
+    """Rebuild a matcher from the aliases actually seen in the corpus.
+
+    The API uses it to read skills from a CV without shipping the ESCO CSV:
+    only skills that occur in vacancies can be matched or recommended anyway.
+    """
+    root = _TrieNode()
+    pairs = mentions[["esco_uri", "skill_label", "matched_text"]].drop_duplicates()
+    for uri, label, phrase in pairs.itertuples(index=False):
+        for alias in {normalize_text(phrase), normalize_text(label)}:
+            if len(alias) < 3:
+                continue
+            node = root
+            for token in alias.split():
+                node = node.children.setdefault(token, _TrieNode())
+            if (uri, label) not in node.concepts:
+                node.concepts.append((uri, label))
+    return EscoMatcher(root=root, taxonomy_version="corpus-lexicon",
+                       concepts=int(pairs["esco_uri"].nunique()))

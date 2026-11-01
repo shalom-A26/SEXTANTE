@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -13,6 +14,12 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import NMF, TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import silhouette_score
+
+POSTING_COLUMNS = (
+    "vacancy_id", "source", "url", "title", "company", "city", "department",
+    "published_at", "salary_min", "salary_max", "contract_type", "work_modality",
+    "education_level", "captured_at",
+)
 
 SPANISH_STOP_WORDS = frozenset({
     "a", "al", "algo", "algunas", "algunos", "ante", "como", "con", "cuando",
@@ -142,6 +149,12 @@ def run_models(
         encoding="utf-8",
     )
     np.save(output_dir / "tfidf_idf.npy", vectorizer.idf_.astype("float32"))
+    # Row-aligned posting metadata (no description) and the fitted vectorizer,
+    # so later stages and the API can score new text against the same space.
+    metadata = working[[column for column in POSTING_COLUMNS if column in working]].copy()
+    metadata["cluster_id"] = labels.astype("int32")
+    metadata.to_parquet(output_dir / "postings.parquet", index=False)
+    joblib.dump(vectorizer, output_dir / "tfidf_vectorizer.joblib")
 
     model_info: dict[str, Any] = {
         "text_rows": int(matrix.shape[0]),

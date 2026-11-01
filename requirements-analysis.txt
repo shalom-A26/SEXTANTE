@@ -3,4 +3,5 @@
 -r requirements.txt
 scikit-learn>=1.4,<2.0
 datasketch>=1.6.5,<2.0
+networkx>=3.2,<4.0
 jupyterlab>=4.2,<5.0
