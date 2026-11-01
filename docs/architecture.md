@@ -356,6 +356,20 @@ data/
 Plus a static `README.md` (dataset card; identical bytes every run, uploaded
 once) and, locally only, `estado.json` (run state, never uploaded).
 
+The batch analytics (`python -m sextante_analysis run --upload`, run
+manually) writes to a separate prefix of the same dataset and never touches
+`data/`:
+
+```
+derived/
+├── runs/<run_id>/     # manifest.json, eda.json, skill_mentions.parquet,
+│                      # duplicate_candidates.parquet, topics, segments, TF-IDF
+└── latest.json        # pointer, updated only after a complete run upload
+```
+
+The capture workflows upload only `data/spe/`, `data/jobspy/` and the card,
+so they cannot overwrite derived outputs. See [analytics.md](analytics.md).
+
 ### Invariants
 
 - **Partition by capture date**: each row lives in the file of the week/day

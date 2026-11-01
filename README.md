@@ -20,16 +20,18 @@ access); the GitHub repository is public so the Actions cron runs are free.
 
 ## Project scope
 
-> **This repository implements Stage 1 — data extraction — only.** Stages 2
-> to 8 are the roadmap of the course project and are *not built yet*. The
-> canonical 17-column schema is the contract every later stage consumes.
+> **This repository implements Stage 1 — data extraction — and a first
+> batch-analytics baseline for Stages 2–4** (`sextante_analysis/`, see
+> [`docs/analytics.md`](docs/analytics.md)). Stages 5 to 8 are *not built
+> yet*. The canonical 17-column schema is the contract every later stage
+> consumes.
 
 | Stage | Content | Status |
 |---|---|---|
 | **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, 30-min + 12h cadence | ✅ **this repository** |
-| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🔜 planned |
-| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🔜 planned |
-| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | 🔜 planned |
+| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`sextante_analysis/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
+| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🟡 baseline (TF-IDF + NMF in batch; optional multilingual embeddings; Word2Vec only in the notebook) |
+| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | 🟡 baseline (TruncatedSVD + K-Means in batch; t-SNE/UMAP/hierarchical/DBSCAN only in the notebook) |
 | 5 · Supervised models | Salary estimation and classification tasks | 🔜 planned |
 | 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | 🔜 planned |
 | 7 · Distributed processing | Apache Spark when the data volume justifies it | if needed |
@@ -148,6 +150,9 @@ Or use the manual wrapper: `./scripts/capture.sh [jobspy|spe|all]`.
 python -m unittest discover -s tests
 ```
 
+The analysis tests need `requirements-analysis.txt`; CI runs the full suite
+plus `ruff check` on every push and pull request (`.github/workflows/tests.yml`).
+
 ### Token
 
 Uploads need an `HF_TOKEN` (write scope). Put it in a `.env` at the repo
@@ -202,5 +207,7 @@ data/
   flows, sequences, data model.
 - [`docs/source-viability.md`](docs/source-viability.md) — source study and
   probe results.
+- [`docs/analytics.md`](docs/analytics.md) — batch analytics (Stages 2–4
+  baseline): setup, ESCO taxonomy, derived artifacts, limitations.
 - [`AGENTS.md`](AGENTS.md) — working agreements for AI agents (commands,
   invariants, hard rules).
