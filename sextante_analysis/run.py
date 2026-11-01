@@ -26,7 +26,7 @@ from .eda import summarize
 from .features import run_models
 from .graph import build_graphs
 from .supervised import train_salary_models
-from .taxonomy import extract_skills, load_esco_csv
+from .taxonomy import DEFAULT_SYNONYMS, extract_skills, load_esco_csv
 
 
 def run_analysis(
@@ -98,6 +98,8 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
                 "language": "es",
                 "version": matcher.taxonomy_version,
                 "concepts_loaded": matcher.concepts,
+                "synonyms_added": matcher.synonyms_added,
+                "synonyms_sha256": sha256_file(DEFAULT_SYNONYMS),
                 "sha256": sha256_file(taxonomy_path),
             },
             "parameters": {

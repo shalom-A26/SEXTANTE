@@ -13,10 +13,17 @@
 | 5 · Supervised | `supervised.py` | Salary regression + salary-band classifier, CV vs baselines |
 | 6 · Graph | `graph.py` | Skill communities/centrality, segment transition routes |
 | 8 · MVP | `sextante_api/`, `web/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps |
-| Quality | `tests/`, `tests.yml` | 80 tests + ruff in CI; demo run for end-to-end checks |
+| Quality | `tests/`, `tests.yml` | 81 tests + ruff in CI; demo run for end-to-end checks |
 
 Verified on a synthetic demo run only (tests, `next build`, manual browser
 check of dashboard and CV flow). **No run on the real corpus yet.**
+
+## Status 2026-11-01
+
+- ESCO v1.2.1 Spanish skills CSV downloaded and validated locally
+  (13,939 skills, sha256 `30b1271f…`). Curated synonym list added.
+- Open decision: how the CSV reaches the runner (HF upload with a local
+  `.env` token, a GitHub release asset, or a manual HF upload).
 
 ## Pending (in order)
 
@@ -36,7 +43,7 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 4. **Deploy** — API (`Dockerfile`) + web (Vercel, root `web/`) as described in [mvp.md](mvp.md#deployment-not-done-yet).
    Needs hosting accounts and a read-only HF token.
 5. **Optional improvements**
-   - Spanish synonyms/abbreviations for ESCO matching (e.g. "BI", "NIIF").
+   - Grow `synonyms_es.csv` with misses found in manual review.
    - Use sentence embeddings in CV matching when `--embeddings` was run.
    - Schedule the analytics run (weekly workflow) once (1) shows it fits a
      GitHub runner's time/memory.

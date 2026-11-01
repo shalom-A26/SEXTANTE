@@ -203,7 +203,7 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `.github/workflows/analytics.yml` — manual full analytics run on a runner
   (ESCO CSV read from the HF dataset; shares the `hf-upload` group).
 - `Dockerfile` — API image (HF latest run, or synthetic demo).
-- `tests/` — 80 tests: stores, emission (incl. byte-stable round-trip), SPE
+- `tests/` — 81 tests: stores, emission (incl. byte-stable round-trip), SPE
   source, JobSpy mapping, environment, analytics, stages 4–6, API.
 - `docs/analytics.md` — analytics setup, artifacts, limitations.
 - `docs/mvp.md` — API, CV matching method, web app.

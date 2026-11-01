@@ -138,7 +138,13 @@ with a Wilson 95% interval.
 
 ## Current limitations
 
-- ESCO extraction is exact phrase/alias matching. It is transparent and
+- ESCO extraction is exact phrase/alias matching, extended with a curated
+  Colombian synonym list (`sextante_analysis/synonyms_es.csv`: synonym →
+  ESCO preferred label, resolved against the loaded CSV; unknown labels are
+  skipped). Count and hash are recorded in the manifest. On a sample
+  posting it raised detected skills from 4 to 10; extend the list as manual
+  review finds misses.
+- Without the synonyms, ESCO extraction is exact phrase/alias matching. It is transparent and
   inexpensive, but does not resolve context, abbreviations, or Colombian
   terminology absent from ESCO.
 - ESCO matches, topics, and clusters are analytical signals, not validated

@@ -99,6 +99,25 @@ class StageUnitTests(unittest.TestCase):
         found = matcher_from_mentions(mentions).match("Experto en consultas SQL y Python")
         self.assertEqual([item["esco_uri"] for item in found], ["u1"])
 
+    def test_curated_synonyms_resolve_to_loaded_esco_labels(self):
+        from sextante_analysis.taxonomy import load_esco_csv
+
+        with tempfile.TemporaryDirectory() as temp:
+            esco = Path(temp) / "skills.csv"
+            esco.write_text(
+                "conceptUri,conceptType,preferredLabel,altLabels\n"
+                "u:sheet,KnowledgeSkillCompetence,utilizar software de hojas de cálculo,\n"
+                "u:service,KnowledgeSkillCompetence,servicio al cliente,\n",
+                encoding="utf-8",
+            )
+            matcher = load_esco_csv(esco)
+            found = {m["esco_uri"] for m in matcher.match("Excel avanzado y atención al cliente")}
+            self.assertEqual(found, {"u:sheet", "u:service"})
+            # Synonyms whose target label is absent are skipped, not invented.
+            self.assertGreater(matcher.synonyms_added, 0)
+            plain = load_esco_csv(esco, synonyms=None)
+            self.assertEqual(plain.match("Excel avanzado"), [])
+
     def test_wilson_interval_bounds(self):
         low, high = wilson_interval(8, 10)
         self.assertTrue(0 < low < 0.8 < high < 1)

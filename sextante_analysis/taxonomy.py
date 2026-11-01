@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 
+DEFAULT_SYNONYMS = Path(__file__).with_name("synonyms_es.csv")
 TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)
 
 
@@ -33,6 +34,7 @@ class EscoMatcher:
     root: _TrieNode
     taxonomy_version: str
     concepts: int
+    synonyms_added: int = 0
 
     def match(self, text: Any) -> list[dict[str, str]]:
         tokens = TOKEN_RE.findall(normalize_text(text))
@@ -66,7 +68,11 @@ def _column(headers: list[str], candidates: tuple[str, ...]) -> str | None:
     )
 
 
-def load_esco_csv(path: str | Path, taxonomy_version: str = "1.2.1") -> EscoMatcher:
+def load_esco_csv(
+    path: str | Path,
+    taxonomy_version: str = "1.2.1",
+    synonyms: str | Path | None = DEFAULT_SYNONYMS,
+) -> EscoMatcher:
     """Load the skills CSV downloaded from the official ESCO portal.
 
     The preferred-label and alternative-label columns are read from the
@@ -91,6 +97,7 @@ def load_esco_csv(path: str | Path, taxonomy_version: str = "1.2.1") -> EscoMatc
 
         root = _TrieNode()
         known_uris: set[str] = set()
+        by_label: dict[str, tuple[str, str]] = {}
         for row in reader:
             uri = (row.get(uri_col) or "").strip()
             label = (row.get(label_col) or "").strip()
@@ -107,6 +114,7 @@ def load_esco_csv(path: str | Path, taxonomy_version: str = "1.2.1") -> EscoMatc
             if alt_col:
                 aliases.extend(part.strip() for part in re.split(r"[|\n;]", row.get(alt_col) or ""))
             concept = (uri, label)
+            by_label.setdefault(normalize_text(label), concept)
             for alias in aliases:
                 normalized = normalize_text(alias)
                 if len(normalized) < 3:
@@ -118,7 +126,32 @@ def load_esco_csv(path: str | Path, taxonomy_version: str = "1.2.1") -> EscoMatc
                     node.concepts.append(concept)
         if not known_uris:
             raise ValueError("ESCO CSV contains no skill concepts; check the selected CSV")
-    return EscoMatcher(root=root, taxonomy_version=taxonomy_version, concepts=len(known_uris))
+    matcher = EscoMatcher(root=root, taxonomy_version=taxonomy_version, concepts=len(known_uris))
+    if synonyms is not None:
+        matcher.synonyms_added = _add_synonyms(root, synonyms, by_label)
+    return matcher
+
+
+def _add_synonyms(root: _TrieNode, path: Path, by_label: dict[str, tuple[str, str]]) -> int:
+    """Attach curated Colombian synonyms to ESCO concepts, resolved by label.
+
+    Rows whose ``esco_label`` is not a skill in the loaded CSV are skipped,
+    so the file never injects concepts that the taxonomy does not contain.
+    """
+    added = 0
+    with Path(path).open("r", encoding="utf-8", newline="") as stream:
+        for row in csv.DictReader(stream):
+            concept = by_label.get(normalize_text(row.get("esco_label")))
+            alias = normalize_text(row.get("synonym"))
+            if concept is None or len(alias) < 2:
+                continue
+            node = root
+            for token in alias.split():
+                node = node.children.setdefault(token, _TrieNode())
+            if concept not in node.concepts:
+                node.concepts.append(concept)
+                added += 1
+    return added
 
 
 def extract_skills(frame: pd.DataFrame, matcher: EscoMatcher) -> pd.DataFrame:
