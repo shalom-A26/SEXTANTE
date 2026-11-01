@@ -200,6 +200,9 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `notebooks/01_text_mining_and_segments.ipynb` — course demo (synthetic data
   by default).
 - `.github/workflows/tests.yml` — unittest + ruff on push/PR.
+- `.github/workflows/analytics.yml` — manual full analytics run on a runner
+  (ESCO CSV read from the HF dataset; shares the `hf-upload` group).
+- `Dockerfile` — API image (HF latest run, or synthetic demo).
 - `tests/` — 80 tests: stores, emission (incl. byte-stable round-trip), SPE
   source, JobSpy mapping, environment, analytics, stages 4–6, API.
 - `docs/analytics.md` — analytics setup, artifacts, limitations.

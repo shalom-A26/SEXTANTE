@@ -53,10 +53,21 @@ time.
 
 Every match carries the posting `url` so the person can apply at the source.
 
+## Docker
+
+```bash
+docker build -t sextante-api .
+docker run -p 8000:8000 -e SEXTANTE_HF_REPO=pxtron/vacantes-colombia \
+  -e HF_TOKEN=<read-only token> -e SEXTANTE_CORS_ORIGINS=https://<web-domain> sextante-api
+```
+
+Without `SEXTANTE_HF_REPO` the container builds and serves a synthetic demo
+run.
+
 ## Deployment (not done yet)
 
 - Web: Vercel (root `web/`, env `NEXT_PUBLIC_API_URL`).
-- API: any container host with ~1–2 GB RAM for the full corpus run (Render,
+- API: the `Dockerfile` on any container host with ~1–2 GB RAM for the full corpus run (Render,
   Fly.io, Railway, a university VM). Start command
   `uvicorn sextante_api.main:app --host 0.0.0.0 --port $PORT`, env
   `SEXTANTE_HF_REPO`, `HF_TOKEN` (read-only token), `SEXTANTE_CORS_ORIGINS`.

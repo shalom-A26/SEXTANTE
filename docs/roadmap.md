@@ -21,17 +21,19 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 ## Pending (in order)
 
 1. **Real corpus run** — download the ESCO v1.2.1 Spanish skills CSV
-   (official portal) and run
-   `HF_TOKEN=... python -m sextante_analysis run --esco-csv skills_es.csv --upload`.
-   Record duration and peak memory (`/usr/bin/time -v`) in this file.
-   Needs the token and the CSV (not in the repo).
+   (official portal, "Classification" → CSV → Spanish), upload it once to the
+   dataset at `taxonomy/esco-v1.2.1/skills_es.csv`, then trigger
+   **Actions → Analytics run (manual)**. The step summary reports duration
+   and peak memory: copy them here. (Locally:
+   `HF_TOKEN=... python -m sextante_analysis run --esco-csv skills_es.csv --upload`.)
+   Needs a human to download the CSV.
 2. **Tune on real data** — check `supervised_metrics.json` beats baselines,
    pick `--clusters` from silhouette/`clustering_comparison.json`, read the
    segment terms and adjust cluster count/stop words if segments are noisy.
 3. **Manual validation** — `python -m sextante_analysis review <run_dir>`,
    have the team label the CSVs (≈ 450 rows), then `evaluate`; report
    precision ± CI in the course document. Human work.
-4. **Deploy** — API + web as described in [mvp.md](mvp.md#deployment-not-done-yet).
+4. **Deploy** — API (`Dockerfile`) + web (Vercel, root `web/`) as described in [mvp.md](mvp.md#deployment-not-done-yet).
    Needs hosting accounts and a read-only HF token.
 5. **Optional improvements**
    - Spanish synonyms/abbreviations for ESCO matching (e.g. "BI", "NIIF").

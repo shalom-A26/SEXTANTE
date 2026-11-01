@@ -57,6 +57,19 @@ unless `SEXTANTE_USE_HF=1` is set:
   --output-dir /tmp/sextante-notebook-run notebooks/01_text_mining_and_segments.ipynb
 ```
 
+### Running on GitHub Actions
+
+`.github/workflows/analytics.yml` (manual, `workflow_dispatch`) runs the same
+command on a GitHub runner with the repository's `HF_TOKEN` secret and
+reports wall time and peak memory in the step summary. Upload the ESCO CSV
+once to the dataset (default path `taxonomy/esco-v1.2.1/skills_es.csv`):
+
+```bash
+huggingface-cli upload pxtron/vacantes-colombia skills_es.csv \
+  taxonomy/esco-v1.2.1/skills_es.csv --repo-type dataset
+gh workflow run analytics.yml            # or: Actions tab → Run workflow
+```
+
 ## Batch behavior and outputs
 
 The CLI reads all SPE and JobSpy Parquet partitions from one repository
