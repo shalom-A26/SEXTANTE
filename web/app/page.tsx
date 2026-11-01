@@ -1,62 +1,79 @@
 import Link from "next/link";
 
+import { DuskField, GlowFigure, SextantScale } from "@/components/field";
+import { ScanCard, SkillsCard } from "@/components/hero-cards";
+
 const audiences = [
-  {
-    title: "Candidatos",
-    body: "Sube tu CV y mira qué vacantes se parecen de verdad a tu perfil, con su porcentaje de coincidencia y el enlace para postularte.",
-  },
-  {
-    title: "Empleadores",
-    body: "Compara salarios, modalidades y habilidades pedidas por segmento ocupacional y ciudad antes de publicar una vacante.",
-  },
-  {
-    title: "Programas académicos",
-    body: "Identifica qué habilidades demanda el mercado por nivel educativo y dónde están las brechas de formación.",
-  },
+  ["Si buscas empleo", "Mira qué vacantes se parecen de verdad a tu perfil y qué habilidades te faltan para la que quieres."],
+  ["Si contratas", "Compara salarios, modalidades y habilidades pedidas en tu sector antes de publicar."],
+  ["Si formas talento", "Ve qué piden las empresas según el nivel educativo y dónde están las brechas."],
 ];
 
 const steps = [
-  ["Captura", "Vacantes del Servicio Público de Empleo y portales como LinkedIn e Indeed, con un esquema común."],
-  ["Texto", "Extracción de habilidades con la taxonomía europea ESCO, temas y detección de duplicados."],
-  ["Segmentos", "Perfiles ocupacionales agrupados por lo que piden las descripciones, no por el título."],
-  ["Señales", "Estimación salarial, grafo de habilidades y rutas de transición entre ocupaciones."],
+  ["Reunimos vacantes", "Del Servicio Público de Empleo y de portales como LinkedIn e Indeed, en un formato común."],
+  ["Leemos la descripción", "Extraemos habilidades con la taxonomía europea ESCO y detectamos vacantes duplicadas."],
+  ["Agrupamos perfiles", "Formamos segmentos ocupacionales por lo que piden las vacantes, no por su título."],
+  ["Medimos señales", "Estimamos salarios y trazamos rutas entre ocupaciones a partir de habilidades compartidas."],
 ];
 
 export default function Home() {
   return (
     <>
       <section className="hero">
-        <p className="eyebrow">Demanda laboral colombiana, medida desde el texto de las vacantes</p>
-        <h1>El título dice “analista junior”. La descripción dice todo lo demás.</h1>
-        <p className="lead">
-          SEXTANTE convierte miles de vacantes colombianas en datos estructurados: qué habilidades se piden,
-          cuánto se paga y qué perfiles existen realmente. Y compara tu CV contra todo eso.
-        </p>
-        <div className="hero-actions">
-          <Link href="/cv" className="cta">Analizar mi CV</Link>
-          <Link href="/dashboard" className="cta-ghost">Explorar el dashboard</Link>
+        <DuskField />
+        <div className="hero-veil" />
+        <div className="hero-grid">
+          <div className="hero-side">
+            <SkillsCard />
+          </div>
+          <div className="hero-center">
+            <h1>El mercado laboral, leído desde el texto</h1>
+            <div className="horizon-stage">
+              <SextantScale />
+              <span className="marker left"><i />Alta demanda</span>
+              <span className="marker right"><i />Baja demanda</span>
+              <GlowFigure />
+              <Link href="/cv" className="cta">Analizar mi CV</Link>
+            </div>
+          </div>
+          <div className="hero-side right">
+            <ScanCard />
+          </div>
         </div>
       </section>
 
-      <section className="grid-3">
-        {audiences.map((a) => (
-          <article key={a.title} className="card">
-            <h3>{a.title}</h3>
-            <p>{a.body}</p>
-          </article>
-        ))}
+      <section className="about">
+        <div className="about-arc" aria-hidden="true" />
+        <div className="about-grid">
+          <ul className="audiences">
+            {audiences.map(([title, body]) => (
+              <li key={title}><h3>{title}</h3><p>{body}</p></li>
+            ))}
+          </ul>
+          <div className="about-center">
+            <span className="kicker">Sobre SEXTANTE</span>
+            <p className="statement">
+              Un título como “Analista junior” esconde trabajos muy distintos. Leemos miles de vacantes colombianas
+              para saber qué se pide, cuánto se paga y dónde encaja tu perfil.
+            </p>
+          </div>
+          <div className="sources">
+            <span className="kicker">Datos de</span>
+            <strong>Servicio Público de Empleo</strong>
+            <strong>LinkedIn</strong>
+            <strong>Indeed</strong>
+          </div>
+        </div>
       </section>
 
-      <section className="steps">
+      <section className="how" id="como-funciona">
         <h2>Cómo funciona</h2>
         <ol>
           {steps.map(([title, body], i) => (
             <li key={title}>
-              <span className="step-n">{String(i + 1).padStart(2, "0")}</span>
-              <div>
-                <h3>{title}</h3>
-                <p>{body}</p>
-              </div>
+              <span className="step-n">{i + 1}</span>
+              <h3>{title}</h3>
+              <p>{body}</p>
             </li>
           ))}
         </ol>
