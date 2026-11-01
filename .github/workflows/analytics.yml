@@ -4,13 +4,19 @@ name: Analytics run (manual) to Hugging Face
 # publishes derived/runs/<id>/ + derived/latest.json. Manual on purpose:
 # measure duration and memory (see the step summary) before scheduling it.
 #
-# Prerequisite: the official ESCO v1.2.1 Spanish skills CSV uploaded once to
-# the dataset at the path given by `esco_path` (it is not in Git).
+# ESCO v1.2.1 Spanish skills CSV (not in Git) comes from the GitHub release
+# `taxonomy-esco-v1.2.1` by default, verified by SHA-256; `esco_source: hf`
+# reads it from the HF dataset at `esco_path` instead.
 on:
   workflow_dispatch:
     inputs:
+      esco_source:
+        description: "Where to read the ESCO skills CSV from"
+        type: choice
+        options: [release, hf]
+        default: release
       esco_path:
-        description: "Path of the ESCO skills CSV inside the HF dataset"
+        description: "Path of the ESCO skills CSV inside the HF dataset (esco_source=hf)"
         default: "taxonomy/esco-v1.2.1/skills_es.csv"
       limit:
         description: "Rows per dataset (empty = full corpus)"
@@ -35,6 +41,7 @@ jobs:
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       ESCO_PATH: ${{ inputs.esco_path }}
+      ESCO_SHA256: 30b1271fca7348a01ace7f33619ff6fc00fc3bb645a4dbdfa8fae6d57789f4a4
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -52,7 +59,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-analysis.txt
 
+      - name: Download the ESCO taxonomy from the GitHub release
+        if: inputs.esco_source == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download taxonomy-esco-v1.2.1 --pattern skills_es.csv --repo "$GITHUB_REPOSITORY"
+          echo "${ESCO_SHA256}  skills_es.csv" | sha256sum --check
+
       - name: Download the ESCO taxonomy from the dataset
+        if: inputs.esco_source == 'hf'
         run: |
           python - <<'PY'
           import os

@@ -201,7 +201,8 @@ Hugging Face simultaneously. Both can also be triggered manually with
   by default).
 - `.github/workflows/tests.yml` — unittest + ruff on push/PR.
 - `.github/workflows/analytics.yml` — manual full analytics run on a runner
-  (ESCO CSV read from the HF dataset; shares the `hf-upload` group).
+  (ESCO CSV from the `taxonomy-esco-v1.2.1` GitHub release, SHA-256
+  verified; shares the `hf-upload` group).
 - `Dockerfile` — API image (HF latest run, or synthetic demo).
 - `tests/` — 81 tests: stores, emission (incl. byte-stable round-trip), SPE
   source, JobSpy mapping, environment, analytics, stages 4–6, API.

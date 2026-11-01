@@ -61,14 +61,18 @@ unless `SEXTANTE_USE_HF=1` is set:
 
 `.github/workflows/analytics.yml` (manual, `workflow_dispatch`) runs the same
 command on a GitHub runner with the repository's `HF_TOKEN` secret and
-reports wall time and peak memory in the step summary. Upload the ESCO CSV
-once to the dataset (default path `taxonomy/esco-v1.2.1/skills_es.csv`):
+reports wall time and peak memory in the step summary. The ESCO CSV comes
+from the GitHub release
+[`taxonomy-esco-v1.2.1`](https://github.com/shalom-A26/SEXTANTE/releases/tag/taxonomy-esco-v1.2.1)
+(unmodified official files with EU attribution, verified by SHA-256); set
+`esco_source=hf` to read it from the dataset instead.
 
 ```bash
-huggingface-cli upload pxtron/vacantes-colombia skills_es.csv \
-  taxonomy/esco-v1.2.1/skills_es.csv --repo-type dataset
-gh workflow run analytics.yml            # or: Actions tab → Run workflow
+gh workflow run analytics.yml -f limit=3000 -f upload=false   # trial
+gh workflow run analytics.yml                                 # full run + upload
 ```
+
+Locally: `gh release download taxonomy-esco-v1.2.1 -p skills_es.csv`.
 
 ## Batch behavior and outputs
 

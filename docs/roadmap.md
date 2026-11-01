@@ -22,18 +22,15 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 
 - ESCO v1.2.1 Spanish skills CSV downloaded and validated locally
   (13,939 skills, sha256 `30b1271f…`). Curated synonym list added.
-- Open decision: how the CSV reaches the runner (HF upload with a local
-  `.env` token, a GitHub release asset, or a manual HF upload).
+- ESCO published as GitHub release `taxonomy-esco-v1.2.1`; the analytics
+  workflow downloads and verifies it, so the real run is unblocked.
 
 ## Pending (in order)
 
-1. **Real corpus run** — download the ESCO v1.2.1 Spanish skills CSV
-   (official portal, "Classification" → CSV → Spanish), upload it once to the
-   dataset at `taxonomy/esco-v1.2.1/skills_es.csv`, then trigger
-   **Actions → Analytics run (manual)**. The step summary reports duration
+1. **Real corpus run** — trigger **Actions → Analytics run (manual)** (ESCO
+   comes from the `taxonomy-esco-v1.2.1` release). The step summary reports duration
    and peak memory: copy them here. (Locally:
    `HF_TOKEN=... python -m sextante_analysis run --esco-csv skills_es.csv --upload`.)
-   Needs a human to download the CSV.
 2. **Tune on real data** — check `supervised_metrics.json` beats baselines,
    pick `--clusters` from silhouette/`clustering_comparison.json`, read the
    segment terms and adjust cluster count/stop words if segments are noisy.
