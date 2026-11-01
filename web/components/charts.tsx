@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 
+// Warm-leaning but hue-separated so 8-10 segments stay distinguishable on burgundy.
 export const PALETTE = [
-  "#2f6fde", "#e0892b", "#1f9e89", "#c4455d", "#7b5cc4", "#5b8c2a", "#b8742e", "#3a8fb7",
-  "#d4609a", "#6b7a8f",
+  "#f7a24b", "#8fd3c4", "#f27c8c", "#c7b3f5", "#f6d36b", "#7fb6ff", "#ecc0a8", "#a8d98a",
+  "#e59ad0", "#b9b0a6",
 ];
 
 type Bar = { label: string; value: number; hint?: string };
@@ -103,7 +104,7 @@ export function SkillGraph({ nodes, edges }: {
         const b = layout[e.target];
         if (!a || !b) return null;
         const active = !focus || e.source === focus || e.target === focus;
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#8a94a6"
+        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ecc0a8"
           strokeWidth={0.4 + (2 * e.weight) / maxWeight} opacity={active ? 0.35 : 0.04} />;
       })}
       {nodes.map((n) => {

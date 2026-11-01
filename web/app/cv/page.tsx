@@ -104,7 +104,7 @@ function Results({ result }: { result: CvResult }) {
               <div className="match-body">
                 <a href={m.url} target="_blank" rel="noopener noreferrer"><strong>{m.title}</strong></a>
                 <span className="muted">
-                  {[m.company, m.city, m.work_modality, m.source].filter(Boolean).join(" · ")}
+                  {[m.company, m.city, m.work_modality].filter(Boolean).join(", ")} en {m.source}
                   {m.salary_min ? ` · ${cop(m.salary_min)}${m.salary_max ? `–${cop(m.salary_max)}` : ""}` : ""}
                 </span>
                 <span className="chips small">
@@ -112,7 +112,7 @@ function Results({ result }: { result: CvResult }) {
                   {m.missing_skills.slice(0, 4).map((s) => <span key={s} className="miss">+ {s}</span>)}
                 </span>
               </div>
-              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme ↗</a>
+              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme</a>
             </li>
           ))}
         </ul>
