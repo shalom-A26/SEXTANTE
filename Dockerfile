@@ -9,7 +9,8 @@ WORKDIR /app
 # System allocator for Arrow: its default pools keep ~150 MB of freed parquet
 # buffers, which matters on 512 MB hosts (see sextante_api/serving.py).
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000 SEXTANTE_PRELOAD=1 \
-    ARROW_DEFAULT_MEMORY_POOL=system MALLOC_ARENA_MAX=2
+    ARROW_DEFAULT_MEMORY_POOL=system MALLOC_ARENA_MAX=2 \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 HF_HUB_DISABLE_PROGRESS_BARS=1
 
 COPY requirements.txt requirements-analysis.txt requirements-api.txt ./
 RUN pip install --no-cache-dir -r requirements-api.txt
@@ -21,4 +22,6 @@ COPY sextante_api/ sextante_api/
 RUN useradd --create-home --uid 1000 sextante && mkdir -p data/analysis/runs && chown -R sextante /app
 USER sextante
 
-CMD ["sh", "-c", "if [ -z \"$SEXTANTE_HF_REPO\" ] && [ -z \"$SEXTANTE_RUN_DIR\" ]; then python -m sextante_analysis demo; fi && exec uvicorn sextante_api.main:app --host 0.0.0.0 --port $PORT"]
+# Download the run in a separate process first: the HF client would otherwise
+# add ~40 MB to the API's peak on a 512 MB host.
+CMD ["sh", "-c", "if [ -n \"$SEXTANTE_HF_REPO\" ] && [ -z \"$SEXTANTE_RUN_DIR\" ]; then SEXTANTE_RUN_DIR=$(python -m sextante_api.data) || exit 1; export SEXTANTE_RUN_DIR; elif [ -z \"$SEXTANTE_RUN_DIR\" ]; then python -m sextante_analysis demo; fi && exec uvicorn sextante_api.main:app --host 0.0.0.0 --port $PORT"]

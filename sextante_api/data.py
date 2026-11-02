@@ -179,3 +179,9 @@ def load_run(run_dir: str | Path) -> RunData:
         precomputed_dashboard=_read_json(run_dir / "dashboard.json") or None,
         segment_stats=segment_stats,
     )
+
+
+if __name__ == "__main__":
+    # Resolve (and download) the run in its own process and print its path, so the
+    # API process never holds the download client's memory (see the Dockerfile).
+    print(resolve_run_dir())
