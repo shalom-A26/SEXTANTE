@@ -5,7 +5,8 @@ Resolution order for the run directory:
 1. ``SEXTANTE_RUN_DIR`` — an explicit run directory;
 2. the newest run under ``SEXTANTE_RUNS_ROOT`` (default ``data/analysis/runs``);
 3. ``derived/latest.json`` of ``SEXTANTE_HF_REPO`` (needs ``HF_TOKEN``),
-   downloaded into the runs root.
+   downloaded into the runs root. With ``SEXTANTE_SERVING=1`` only the run's
+   ``serving/`` bundle is downloaded (see ``serving.py``; fits ~512 MB hosts).
 """
 
 from __future__ import annotations
@@ -51,6 +52,20 @@ class RunData:
     skill_labels: dict[str, str]
     posting_skills: list[frozenset[str]]  # per matrix row
     segment_names: dict[int, str] | None = None  # cached by insights.segment_names
+    precomputed_dashboard: dict[str, Any] | None = None  # serving bundle only
+    segment_stats: dict[int, dict[str, Any]] | None = None  # serving bundle only
+
+
+# Artifacts the API reads; the rest of a run (duplicates, topic assignments,
+# per-posting estimates) is for analysts and is not downloaded.
+API_FILES = (
+    "manifest.json", "eda.json", "postings.parquet", "tfidf_matrix.npz",
+    "tfidf_vectorizer.joblib", "segment_profiles.csv", "segment_skills.parquet",
+    "skill_graph_nodes.parquet", "skill_graph_edges.parquet", "segment_transitions.parquet",
+    "topics.csv", "segment_projection.parquet", "supervised_metrics.json",
+    "clustering_comparison.json", "graph_metrics.json", "salary_model.joblib",
+    "skill_mentions.parquet",
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -87,9 +102,15 @@ def _download_latest(repo: str, root: Path) -> Path:
     token = os.environ.get("HF_TOKEN")
     latest = hf_hub_download(repo, "derived/latest.json", repo_type="dataset", token=token)
     run_id = json.loads(Path(latest).read_text(encoding="utf-8"))["run_id"]
+    run_path = f"derived/runs/{run_id}"
+    if os.environ.get("SEXTANTE_SERVING") == "1":
+        run_path += "/serving"
+        patterns = [f"{run_path}/*"]
+    else:
+        patterns = [f"{run_path}/{name}" for name in API_FILES]
     snapshot_download(repo, repo_type="dataset", token=token, local_dir=str(root / "_hf"),
-                      allow_patterns=[f"derived/runs/{run_id}/*"])
-    return root / "_hf" / "derived" / "runs" / run_id
+                      allow_patterns=patterns)
+    return root / "_hf" / run_path
 
 
 def load_run(run_dir: str | Path) -> RunData:
@@ -99,12 +120,22 @@ def load_run(run_dir: str | Path) -> RunData:
     if matrix.shape[0] != len(postings):
         raise ValueError("postings.parquet is not row-aligned with tfidf_matrix.npz")
     labels = postings["cluster_id"].to_numpy()
-    segment_ids = sorted(int(value) for value in np.unique(labels))
-    centroids = normalize(np.vstack([
-        np.asarray(matrix[labels == segment].mean(axis=0)).ravel() for segment in segment_ids
-    ]))
+    stats = _read_json(run_dir / "segment_stats.json")
+    segment_stats = {int(key): value for key, value in stats.items()} or None
+    if segment_stats:  # serving bundle: segments come from the full run
+        segment_ids = sorted(segment_stats)
+        centroids = np.load(run_dir / "centroids.npy")
+    else:
+        segment_ids = sorted(int(value) for value in np.unique(labels))
+        centroids = normalize(np.vstack([
+            np.asarray(matrix[labels == segment].mean(axis=0)).ravel()
+            for segment in segment_ids
+        ]))
 
     mentions = _parquet(run_dir / "skill_mentions.parquet")
+    aliases = _parquet(run_dir / "skill_aliases.parquet")
+    if aliases.empty:
+        aliases = mentions
     skills_by_posting: dict[tuple[str, str], set[str]] = defaultdict(set)
     for vacancy_id, source, uri in mentions[["vacancy_id", "source", "esco_uri"]].itertuples(
         index=False
@@ -137,10 +168,14 @@ def load_run(run_dir: str | Path) -> RunData:
         comparison=_read_json(run_dir / "clustering_comparison.json"),
         graph_metrics=_read_json(run_dir / "graph_metrics.json"),
         salary_bundle=joblib.load(salary_path) if salary_path.is_file() else None,
-        matcher=matcher_from_mentions(mentions) if not mentions.empty
+        matcher=matcher_from_mentions(aliases) if not aliases.empty
         else matcher_from_mentions(pd.DataFrame(columns=["esco_uri", "skill_label",
                                                          "matched_text"])),
-        skill_labels=dict(zip(mentions.get("esco_uri", []), mentions.get("skill_label", []),
+        skill_labels=dict(zip(aliases.get("esco_uri", []), aliases.get("skill_label", []),
                               strict=True)),
         posting_skills=posting_skills,
+        segment_names={key: value["name"] for key, value in segment_stats.items()}
+        if segment_stats else None,
+        precomputed_dashboard=_read_json(run_dir / "dashboard.json") or None,
+        segment_stats=segment_stats,
     )

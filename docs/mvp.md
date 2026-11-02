@@ -64,10 +64,30 @@ docker run -p 8000:8000 -e SEXTANTE_HF_REPO=pxtron/vacantes-colombia \
 Without `SEXTANTE_HF_REPO` the container builds and serves a synthetic demo
 run.
 
-## Deployment (not done yet)
+## Deployment
 
-- Web: Vercel (root `web/`, env `NEXT_PUBLIC_API_URL`).
-- API: the `Dockerfile` on any container host with ~1–2 GB RAM for the full corpus run (Render,
-  Fly.io, Railway, a university VM). Start command
-  `uvicorn sextante_api.main:app --host 0.0.0.0 --port $PORT`, env
-  `SEXTANTE_HF_REPO`, `HF_TOKEN` (read-only token), `SEXTANTE_CORS_ORIGINS`.
+Free hosting has ~512 MB of RAM; the API over the full run needs ~2.5 GB.
+Each analytics run therefore also writes a **serving bundle**
+(`derived/runs/<run_id>/serving/`, ~32 MB, built by `sextante_api/serving.py`;
+for an existing run: `python -m sextante_api.serving <run_dir>`):
+
+- the dashboard payload precomputed over the whole corpus (all figures stay
+  corpus-wide), segment names/sizes/median salaries and centroids;
+- every ESCO alias seen, so CV skill detection keeps the full vocabulary;
+- the 40,000 most recently captured postings for CV matching (recent ones
+  are the most likely to still accept applications).
+
+With `SEXTANTE_SERVING=1` the API downloads only that bundle: ~390 MB peak
+RSS, CV match in ~30 ms. Arrow uses the system allocator
+(`ARROW_DEFAULT_MEMORY_POOL=system`, set in the `Dockerfile`); its default
+pools keep ~150 MB of freed buffers.
+
+- **API: Render** (free web service, `render.yaml` blueprint): New →
+  Blueprint → this repo; enter `HF_TOKEN` (read access to the dataset) when
+  asked. CORS allows `http://localhost:3000` and any `https://*.vercel.app`
+  (`SEXTANTE_CORS_ORIGINS`, `SEXTANTE_CORS_ORIGIN_REGEX`). The free instance
+  sleeps after 15 min idle; the first request then takes ~1 min.
+- **Web: Vercel**, root directory `web/`, env `NEXT_PUBLIC_API_URL` = the
+  Render URL (build-time variable: redeploy after changing it).
+- Hugging Face Docker Spaces were the first choice but now require a PRO
+  subscription.

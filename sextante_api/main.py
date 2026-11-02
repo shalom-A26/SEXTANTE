@@ -7,6 +7,7 @@ which scores an uploaded CV in memory and stores nothing.
 from __future__ import annotations
 
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
@@ -24,6 +25,7 @@ def create_app(run_dir: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="SEXTANTE API", version=__version__)
     origins = os.environ.get("SEXTANTE_CORS_ORIGINS", "http://localhost:3000").split(",")
     app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins],
+                       allow_origin_regex=os.environ.get("SEXTANTE_CORS_ORIGIN_REGEX") or None,
                        allow_methods=["GET", "POST"], allow_headers=["*"])
 
     @lru_cache(maxsize=1)
@@ -33,6 +35,10 @@ def create_app(run_dir: str | Path | None = None) -> FastAPI:
     @lru_cache(maxsize=1)
     def cached_dashboard() -> dict[str, Any]:
         return dashboard(run())
+
+    if os.environ.get("SEXTANTE_PRELOAD") == "1":
+        # Load the run (and warm the dashboard) while the server already answers.
+        threading.Thread(target=cached_dashboard, daemon=True).start()
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:

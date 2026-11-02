@@ -40,6 +40,11 @@ def run_analysis(
         raise FileNotFoundError(f"ESCO CSV does not exist: {config.esco_csv}")
     # No local reference to the frame: build_run can free text it no longer needs.
     run_dir = build_run(*load_corpus(repo=config.repo, token=token, limit=config.limit), config)
+    # Small slice for 512 MB API hosts (sextante_api/serving.py), built after the
+    # corpus frame is freed. Local import: the API package depends on this one.
+    from sextante_api.serving import build_bundle
+
+    build_bundle(run_dir)
     if config.upload:
         publish_run(run_dir, config.repo, run_dir.name, token or os.environ.get("HF_TOKEN"))
     return run_dir

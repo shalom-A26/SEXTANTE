@@ -54,8 +54,10 @@ quality must be judged by reading segment terms and manual review.
 3. **Manual validation** — `python -m sextante_analysis review <run_dir>`,
    have the team label the CSVs (≈ 450 rows), then `evaluate`; report
    precision ± CI in the course document. Human work.
-4. **Deploy** — API (`Dockerfile`) + web (Vercel, root `web/`) as described in [mvp.md](mvp.md#deployment-not-done-yet).
-   Needs hosting accounts and a read-only HF token.
+4. **Deploy** — API on Render (free, `render.yaml`, serving bundle) + web on
+   Vercel (root `web/`), see [mvp.md](mvp.md#deployment). Serving bundle of
+   run `20261101T170836441392Z-cd50c976` is published; Render service and
+   Vercel project are being set up.
 5. **Optional improvements**
    - Grow `synonyms_es.csv` with misses found in manual review.
    - Use sentence embeddings in CV matching when `--embeddings` was run.

@@ -73,5 +73,26 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/segments/999/postings").status_code, 404)
 
 
+@unittest.skipIf(TestClient is None, "requires requirements-api.txt")
+class ServingBundleTests(unittest.TestCase):
+    def test_bundle_keeps_corpus_figures_and_matches(self):
+        from sextante_analysis.demo import run_demo
+        from sextante_api.main import create_app
+        from sextante_api.serving import build_bundle
+
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = run_demo(temp, rows=240)
+            full = TestClient(create_app(run_dir)).get("/api/dashboard").json()
+            client = TestClient(create_app(build_bundle(run_dir, rows=60)))
+            self.assertEqual(client.get("/api/health").json()["postings"], 60)
+            self.assertEqual(client.get("/api/dashboard").json()["overview"], full["overview"])
+            body = client.post("/api/cv/match", data={"text": CV, "limit": "5"}).json()
+            self.assertIn("contabilidad", body["cv_skills"])
+            self.assertTrue(body["matches"])
+            sizes = {s["id"]: s["postings"] for s in full["segments"]}
+            self.assertEqual(body["current_segment"]["postings"],
+                             sizes[body["current_segment"]["segment"]])
+
+
 if __name__ == "__main__":
     unittest.main()
