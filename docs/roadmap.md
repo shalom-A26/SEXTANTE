@@ -32,6 +32,7 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 | 3,000 | 6,000 | 1 min 16 s | 7.7 GB | 19,470 | 0.70 M (1.06 M) COP | 0.80 (0.49) | 0.18 |
 | 30,000 | 33,039 | 4 min 00 s | 8.0 GB | 83,729 | 0.45 M (0.66 M) COP | 0.84 (0.60) | 0.15 |
 | **full (published)** | **481,597** | **29 min 51 s** | **13.0 GB** | **1,195,358** | **0.39 M (0.61 M) COP** | **0.87 (0.61)** | **0.13** |
+| full, memory + quality fixes, k=16 (run 41372926225) | 482,989 | 46 min 02 s | 11.0 GB | 985,868 | 0.40 M COP | 0.86 | 0.21 |
 
 First published run: `derived/runs/20261101T170836441392Z-cd50c976`
 (corpus revision `cd50c976`, 2026-11-01), `derived/latest.json` points to it.
@@ -41,6 +42,14 @@ corpus grows daily, so reduce memory (stream partitions, drop descriptions
 after vectorizing, cap bigram vocabulary) before scheduling the run. Silhouette on the full
 sparse TF-IDF is ~0.01 (normal for high-dimensional sparse text); segment
 quality must be judged by reading segment terms and manual review.
+
+Memory + quality run (PR #7, `upload=false`, `--clusters 16`): peak RSS down
+13.0 → 11.0 GB. 89,815 mojibake cells were repaired. Skill mentions dropped
+by ~18% because of the ambiguous-alias blocklist (it removed false
+positives such as "transporte" → logistics). Wall time rose to 46 min (16
+clusters plus the k-sweep). K-sweep silhouettes (SVD-50 sample): k=8 0.15,
+12 0.18, 16 0.21, 20 0.23, 24 0.24. Before publishing, read the segment
+terms at k=16–20, then run with `upload=true`.
 
 ## Pending (in order)
 
