@@ -34,6 +34,25 @@ SPANISH_STOP_WORDS = frozenset({
 })
 
 
+# Posting boilerplate that is shared across occupations (schedules, benefits,
+# hiring formulas). Found on the full corpus: without it, two K-Means segments
+# were "lunes viernes 00 pm" and "prestaciones turnos domingo".
+BOILERPLATE_STOP_WORDS = frozenset({
+    "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "sabados", "domingo",
+    "domingos", "festivos", "horario", "horarios", "am", "pm", "hora", "horas", "turno",
+    "turnos", "rotativos", "jornada", "tiempo", "completo", "salario", "prestaciones",
+    "sociales", "ley", "contrato", "termino", "indefinido", "fijo", "pago", "quincenal",
+    "mensual", "bonificacion", "bonificaciones", "auxilio", "transporte", "estable",
+    "vinculacion", "inmediata", "beneficios", "experiencia", "anos", "ano", "meses", "mes",
+    "minimo", "requisitos", "funciones", "cargo", "empresa", "importante", "requiere",
+    "buscamos", "vacante", "oferta", "laborar", "laborales", "tipo", "aplica", "postulate",
+    "perfil", "persona", "personal", "candidato", "interesados", "hoja", "vida", "enviar",
+    "correo", "ciudad", "sede", "nivel", "formacion", "academica", "trabajo", "trabajar",
+    "con", "sin", "nuestro", "nuestra", "equipo",
+})
+TOKEN_PATTERN = r"(?u)\b[^\W\d_]{2,}\b"  # letters only: drops "000", "30", "2026"
+
+
 def prepare_descriptions(frame: pd.DataFrame) -> list[str]:
     """Combine title and description while retaining both vacancy identifiers."""
     title = frame["title"].fillna("").astype(str)
@@ -41,13 +60,23 @@ def prepare_descriptions(frame: pd.DataFrame) -> list[str]:
     return (title + " . " + description).tolist()
 
 
+FIT_SAMPLE_ROWS = 120_000
+
+
 def fit_tfidf(
-    texts: list[str], max_features: int = 50_000
+    texts: list[str], max_features: int = 50_000, fit_sample: int = FIT_SAMPLE_ROWS
 ) -> tuple[TfidfVectorizer, sparse.csr_matrix]:
+    """Fit vocabulary and IDF on an evenly spaced sample, transform every text.
+
+    Counting all 1-2-grams of the full corpus before pruning to
+    ``max_features`` was the main memory cost of a run; a fixed-size sample
+    bounds it while keeping the frequent terms that survive pruning anyway.
+    """
     vectorizer = TfidfVectorizer(
         strip_accents="unicode",
         lowercase=True,
-        stop_words=sorted(SPANISH_STOP_WORDS),
+        stop_words=sorted(SPANISH_STOP_WORDS | BOILERPLATE_STOP_WORDS),
+        token_pattern=TOKEN_PATTERN,
         ngram_range=(1, 2),
         min_df=2,
         max_df=0.98,
@@ -55,7 +84,11 @@ def fit_tfidf(
         sublinear_tf=True,
         dtype=np.float32,
     )
-    return vectorizer, vectorizer.fit_transform(texts)
+    if len(texts) <= fit_sample:
+        return vectorizer, vectorizer.fit_transform(texts)
+    sample = np.linspace(0, len(texts) - 1, fit_sample, dtype=int)
+    vectorizer.fit([texts[index] for index in sample])
+    return vectorizer, vectorizer.transform(texts)
 
 
 def _top_terms(vectorizer: TfidfVectorizer, values: np.ndarray, count: int = 12) -> list[str]:
@@ -82,7 +115,8 @@ def run_models(
     if len(nonempty) < 3:
         raise ValueError("At least three non-empty vacancy texts are required")
     working = frame.iloc[nonempty].reset_index(drop=True)
-    vectorizer, matrix = fit_tfidf([texts[index] for index in nonempty], max_features)
+    texts = [texts[index] for index in nonempty]
+    vectorizer, matrix = fit_tfidf(texts, max_features)
     if matrix.shape[1] < 2:
         raise ValueError("Text corpus has fewer than two usable terms")
     k_topics = min(topic_count, max(2, min(matrix.shape[0] - 1, matrix.shape[1] - 1)))
@@ -176,7 +210,7 @@ def run_models(
         model_revision = "b8ef00830037f9868450f778081ea683e900fe39"
         model = SentenceTransformer(model_id, revision=model_revision)
         vectors = model.encode(
-            [texts[index] for index in nonempty],
+            texts,
             batch_size=64,
             show_progress_bar=True,
             normalize_embeddings=True,

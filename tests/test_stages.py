@@ -118,6 +118,52 @@ class StageUnitTests(unittest.TestCase):
             plain = load_esco_csv(esco, synonyms=None)
             self.assertEqual(plain.match("Excel avanzado"), [])
 
+    def test_tfidf_sample_fit_transforms_every_text(self):
+        from sextante_analysis.features import fit_tfidf
+
+        roles = ["analista python sql", "contador nomina excel", "vendedor clientes crm"]
+        texts = [f"{roles[i % 3]} {['bogota', 'cali'][i % 2]}" for i in range(40)]
+        full_vectorizer, full = fit_tfidf(texts, max_features=100)
+        sample_vectorizer, sampled = fit_tfidf(texts, max_features=100, fit_sample=10)
+        self.assertEqual(sampled.shape[0], 40)
+        self.assertIn("python", sample_vectorizer.vocabulary_)
+        self.assertEqual(full.shape[0], sampled.shape[0])
+
+    def test_repairs_double_encoded_text_in_place(self):
+        from sextante_analysis.cleaning import repair_frame, repair_mojibake
+
+        broken = "Técnico en gestión".encode("utf-8").decode("cp1252")
+        self.assertEqual(repair_mojibake(broken), "Técnico en gestión")
+        self.assertEqual(repair_mojibake("Técnico ya correcto"), "Técnico ya correcto")
+        frame = pd.DataFrame({"title": [broken, "Auxiliar"], "description": ["ok", None]})
+        self.assertEqual(repair_frame(frame), 1)
+        self.assertEqual(frame.loc[0, "title"], "Técnico en gestión")
+
+    def test_blocklist_drops_ambiguous_aliases(self):
+        from sextante_analysis.taxonomy import load_esco_csv
+
+        with tempfile.TemporaryDirectory() as temp:
+            esco = Path(temp) / "skills.csv"
+            esco.write_text(
+                "conceptUri,conceptType,preferredLabel,altLabels\n"
+                "u:log,KnowledgeSkillCompetence,logística,transporte\n"
+                "u:fin,KnowledgeSkillCompetence,finés,fines\n",
+                encoding="utf-8",
+            )
+            text = "Auxilio de transporte para fines de contratación en logística"
+            found = {m["esco_uri"] for m in load_esco_csv(esco).match(text)}
+            self.assertEqual(found, {"u:log"})
+            loose = load_esco_csv(esco, blocklist=None).match(text)
+            self.assertEqual({m["esco_uri"] for m in loose}, {"u:log", "u:fin"})
+
+    def test_clean_title_strips_noise(self):
+        from sextante_api.insights import clean_title
+
+        self.assertEqual(
+            clean_title("Asesor call center con o sin experiencia"), "Asesor call center"
+        )
+        self.assertEqual(clean_title("AUXILIAR CONTABLE SENIOR - Bogotá"), "Auxiliar contable")
+
     def test_wilson_interval_bounds(self):
         low, high = wilson_interval(8, 10)
         self.assertTrue(0 < low < 0.8 < high < 1)

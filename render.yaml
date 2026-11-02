@@ -1,0 +1,23 @@
+# Render Blueprint for the SEXTANTE API (free 512 MB instance).
+# The API downloads only the run's serving bundle (~32 MB, ~390 MB RSS);
+# see sextante_api/serving.py. HF_TOKEN (read access to the private dataset)
+# is asked for in the Render dashboard and never stored in this file.
+services:
+  - type: web
+    name: sextante-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: HF_TOKEN
+        sync: false
+      - key: SEXTANTE_HF_REPO
+        value: pxtron/vacantes-colombia
+      - key: SEXTANTE_SERVING
+        value: "1"
+      - key: SEXTANTE_CORS_ORIGINS
+        value: http://localhost:3000
+      - key: SEXTANTE_CORS_ORIGIN_REGEX
+        value: https://.*\.vercel\.app

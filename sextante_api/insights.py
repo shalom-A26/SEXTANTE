@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -34,14 +35,28 @@ def _distribution(series: pd.Series, top: int = 8) -> list[dict[str, Any]]:
     return [{"label": label, "count": int(count)} for label, count in counts.head(top).items()]
 
 
+_TITLE_NOISE = re.compile(
+    r"\s*(?:[-–—|/(:,!¡].*$|\b(?:con o sin|con|sin) experiencia\b.*$"
+    r"|\b(?:junior|senior|sr|jr|i{1,3})\b\.?)",
+    flags=re.IGNORECASE,
+)
+
+
+def clean_title(title: str) -> str:
+    """'Asesor comercial call center - con o sin experiencia' -> 'Asesor comercial call center'."""
+    text = _TITLE_NOISE.sub("", str(title or "")).strip()
+    return text[:1].upper() + text[1:].lower() if text else ""
+
+
 def segment_names(run: RunData) -> dict[int, str]:
-    """Human label per segment: its most frequent posting title."""
+    """Human label per segment: its most frequent cleaned posting title."""
+    if run.segment_names is not None:
+        return run.segment_names
     names = {}
     for segment, titles in run.postings.groupby("cluster_id")["title"]:
-        common = titles.fillna("").str.strip().str.capitalize().value_counts()
-        names[int(segment)] = str(common.index[0]) if len(common) and common.index[0] else (
-            f"Segmento {segment}"
-        )
+        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts()
+        names[int(segment)] = str(common.index[0]) if len(common) else f"Segmento {segment}"
+    run.segment_names = names
     return names
 
 
@@ -62,6 +77,8 @@ def _salary_stats(values: pd.Series) -> dict[str, Any]:
 
 
 def dashboard(run: RunData) -> dict[str, Any]:
+    if run.precomputed_dashboard is not None:
+        return run.precomputed_dashboard
     postings = run.postings.copy()
     postings["salary"] = salary_target(postings)
     names = segment_names(run)
@@ -251,15 +268,19 @@ def match_cv(run: RunData, text: str, limit: int = 20,
         affinities.append((0.5 * relative + 0.5 * coverage, segment, coverage))
     affinities.sort(reverse=True)
     current = affinities[0][1] if affinities else None
-    salaries = salary_target(postings)
+    salaries = None if run.segment_stats else salary_target(postings)
 
     def describe(affinity: float, segment: int, coverage: float) -> dict[str, Any]:
-        members = postings["cluster_id"] == segment
+        if run.segment_stats:  # serving bundle: corpus-wide figures
+            size = run.segment_stats[segment]["postings"]
+            median = run.segment_stats[segment]["median_salary"]
+        else:
+            members = postings["cluster_id"] == segment
+            size, median = int(members.sum()), _clean(salaries[members].median())
         return {
             "segment": segment, "name": names.get(segment),
             "affinity": round(100 * affinity, 1), "skill_coverage": round(100 * coverage, 1),
-            "postings": int(members.sum()),
-            "median_salary": _clean(salaries[members].median()),
+            "postings": size, "median_salary": median,
             "gaps": _gaps(run, segment, have),
         }
 
