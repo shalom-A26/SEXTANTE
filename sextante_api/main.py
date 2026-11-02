@@ -28,9 +28,17 @@ def create_app(run_dir: str | Path | None = None) -> FastAPI:
                        allow_origin_regex=os.environ.get("SEXTANTE_CORS_ORIGIN_REGEX") or None,
                        allow_methods=["GET", "POST"], allow_headers=["*"])
 
-    @lru_cache(maxsize=1)
+    loaded: list[RunData] = []
+    lock = threading.Lock()
+
     def run() -> RunData:
-        return load_run(run_dir or resolve_run_dir())
+        # One load at a time: the preload thread and the first requests (e.g. the
+        # host's health check) must not each load a copy, or a 512 MB host OOMs.
+        if not loaded:
+            with lock:
+                if not loaded:
+                    loaded.append(load_run(run_dir or resolve_run_dir()))
+        return loaded[0]
 
     @lru_cache(maxsize=1)
     def cached_dashboard() -> dict[str, Any]:
@@ -40,8 +48,12 @@ def create_app(run_dir: str | Path | None = None) -> FastAPI:
         # Load the run (and warm the dashboard) while the server already answers.
         threading.Thread(target=cached_dashboard, daemon=True).start()
 
+    preload = os.environ.get("SEXTANTE_PRELOAD") == "1"
+
     @app.get("/api/health")
     def health() -> dict[str, Any]:
+        if preload and not loaded:  # answer the host's health check while loading
+            return {"status": "loading"}
         data = run()
         return {"status": "ok", "run_id": data.manifest.get("run_id"),
                 "postings": len(data.postings)}
