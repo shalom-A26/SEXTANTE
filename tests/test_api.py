@@ -74,6 +74,36 @@ class ApiTests(unittest.TestCase):
 
 
 @unittest.skipIf(TestClient is None, "requires requirements-api.txt")
+class LoadOnceTests(unittest.TestCase):
+    def test_concurrent_requests_load_the_run_once(self):
+        import threading
+        import time
+        from unittest import mock
+
+        from sextante_analysis.demo import run_demo
+        from sextante_api import main
+
+        calls = []
+        real = main.load_run
+
+        def slow_load(path):
+            calls.append(path)
+            time.sleep(0.3)
+            return real(path)
+
+        with tempfile.TemporaryDirectory() as temp, \
+                mock.patch.object(main, "load_run", slow_load):
+            client = TestClient(main.create_app(run_demo(temp, rows=120)))
+            threads = [threading.Thread(target=client.get, args=("/api/dashboard",))
+                       for _ in range(3)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(len(calls), 1)
+
+
+@unittest.skipIf(TestClient is None, "requires requirements-api.txt")
 class ServingBundleTests(unittest.TestCase):
     def test_bundle_keeps_corpus_figures_and_matches(self):
         from sextante_analysis.demo import run_demo
