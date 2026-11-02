@@ -34,6 +34,25 @@ SPANISH_STOP_WORDS = frozenset({
 })
 
 
+# Posting boilerplate that is shared across occupations (schedules, benefits,
+# hiring formulas). Found on the full corpus: without it, two K-Means segments
+# were "lunes viernes 00 pm" and "prestaciones turnos domingo".
+BOILERPLATE_STOP_WORDS = frozenset({
+    "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "sabados", "domingo",
+    "domingos", "festivos", "horario", "horarios", "am", "pm", "hora", "horas", "turno",
+    "turnos", "rotativos", "jornada", "tiempo", "completo", "salario", "prestaciones",
+    "sociales", "ley", "contrato", "termino", "indefinido", "fijo", "pago", "quincenal",
+    "mensual", "bonificacion", "bonificaciones", "auxilio", "transporte", "estable",
+    "vinculacion", "inmediata", "beneficios", "experiencia", "anos", "ano", "meses", "mes",
+    "minimo", "requisitos", "funciones", "cargo", "empresa", "importante", "requiere",
+    "buscamos", "vacante", "oferta", "laborar", "laborales", "tipo", "aplica", "postulate",
+    "perfil", "persona", "personal", "candidato", "interesados", "hoja", "vida", "enviar",
+    "correo", "ciudad", "sede", "nivel", "formacion", "academica", "trabajo", "trabajar",
+    "con", "sin", "nuestro", "nuestra", "equipo",
+})
+TOKEN_PATTERN = r"(?u)\b[^\W\d_]{2,}\b"  # letters only: drops "000", "30", "2026"
+
+
 def prepare_descriptions(frame: pd.DataFrame) -> list[str]:
     """Combine title and description while retaining both vacancy identifiers."""
     title = frame["title"].fillna("").astype(str)
@@ -56,7 +75,8 @@ def fit_tfidf(
     vectorizer = TfidfVectorizer(
         strip_accents="unicode",
         lowercase=True,
-        stop_words=sorted(SPANISH_STOP_WORDS),
+        stop_words=sorted(SPANISH_STOP_WORDS | BOILERPLATE_STOP_WORDS),
+        token_pattern=TOKEN_PATTERN,
         ngram_range=(1, 2),
         min_df=2,
         max_df=0.98,

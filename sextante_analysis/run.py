@@ -19,6 +19,7 @@ from scipy import sparse
 
 from . import __version__
 from .artifacts import publish_run, sha256_file, write_json, write_manifest
+from .cleaning import repair_frame
 from .comparison import compare_clusterings
 from .config import AnalysisConfig
 from .corpus import load_corpus
@@ -27,7 +28,7 @@ from .eda import summarize
 from .features import run_models
 from .graph import build_graphs
 from .supervised import train_salary_models
-from .taxonomy import DEFAULT_SYNONYMS, extract_skills, load_esco_csv
+from .taxonomy import DEFAULT_BLOCKLIST, DEFAULT_SYNONYMS, extract_skills, load_esco_csv
 
 
 def run_analysis(
@@ -37,8 +38,8 @@ def run_analysis(
     """Load one pinned HF revision and run every analytics stage on it."""
     if not config.esco_csv.is_file():
         raise FileNotFoundError(f"ESCO CSV does not exist: {config.esco_csv}")
-    frame, source = load_corpus(repo=config.repo, token=token, limit=config.limit)
-    run_dir = build_run(frame, source, config)
+    # No local reference to the frame: build_run can free text it no longer needs.
+    run_dir = build_run(*load_corpus(repo=config.repo, token=token, limit=config.limit), config)
     if config.upload:
         publish_run(run_dir, config.repo, run_dir.name, token or os.environ.get("HF_TOKEN"))
     return run_dir
@@ -55,6 +56,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
     run_dir = config.output_root / run_id
     with TemporaryDirectory(prefix=f".{run_id}.", dir=config.output_root) as staging_name:
         staging = Path(staging_name)
+        repaired_cells = repair_frame(frame)
         write_json(staging / "eda.json", summarize(frame))
         matcher = load_esco_csv(taxonomy_path)
         skills = extract_skills(frame, matcher)
@@ -102,6 +104,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
                 "concepts_loaded": matcher.concepts,
                 "synonyms_added": matcher.synonyms_added,
                 "synonyms_sha256": sha256_file(DEFAULT_SYNONYMS),
+                "alias_blocklist_sha256": sha256_file(DEFAULT_BLOCKLIST),
                 "sha256": sha256_file(taxonomy_path),
             },
             "parameters": {
@@ -115,6 +118,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
                 "random_seed": 42,
             },
             "results": {
+                "repaired_text_cells": repaired_cells,
                 "skill_mentions": int(len(skills)),
                 "duplicate_candidates": int(len(duplicates)),
                 **model_info,

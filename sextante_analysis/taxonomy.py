@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 DEFAULT_SYNONYMS = Path(__file__).with_name("synonyms_es.csv")
+DEFAULT_BLOCKLIST = Path(__file__).with_name("alias_blocklist_es.csv")
 TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)
 
 
@@ -72,6 +73,7 @@ def load_esco_csv(
     path: str | Path,
     taxonomy_version: str = "1.2.1",
     synonyms: str | Path | None = DEFAULT_SYNONYMS,
+    blocklist: str | Path | None = DEFAULT_BLOCKLIST,
 ) -> EscoMatcher:
     """Load the skills CSV downloaded from the official ESCO portal.
 
@@ -79,6 +81,7 @@ def load_esco_csv(
     language-specific CSV; occupation rows and malformed concepts are ignored.
     """
     path = Path(path)
+    blocked = _read_blocklist(blocklist) if blocklist is not None else {}
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
         sample = stream.read(8192)
         stream.seek(0)
@@ -119,6 +122,9 @@ def load_esco_csv(
                 normalized = normalize_text(alias)
                 if len(normalized) < 3:
                     continue
+                block = blocked.get(normalized)
+                if block is not None and (not block or normalize_text(label) in block):
+                    continue
                 node = root
                 for token in normalized.split():
                     node = node.children.setdefault(token, _TrieNode())
@@ -130,6 +136,29 @@ def load_esco_csv(
     if synonyms is not None:
         matcher.synonyms_added = _add_synonyms(root, synonyms, by_label)
     return matcher
+
+
+def _read_blocklist(path: str | Path) -> dict[str, set[str]]:
+    """Ambiguous ESCO aliases that must not match (curated from real data).
+
+    An empty ``esco_label`` blocks the alias for every concept; otherwise only
+    the listed concept loses that alias.
+    """
+    blocked: dict[str, set[str]] = {}
+    global_aliases: set[str] = set()
+    with Path(path).open("r", encoding="utf-8", newline="") as stream:
+        for row in csv.DictReader(stream):
+            alias = normalize_text(row.get("alias"))
+            if not alias:
+                continue
+            label = normalize_text(row.get("esco_label"))
+            if not label:
+                global_aliases.add(alias)
+            else:
+                blocked.setdefault(alias, set()).add(label)
+    for alias in global_aliases:  # a global block wins over per-concept rows
+        blocked[alias] = set()
+    return blocked
 
 
 def _add_synonyms(root: _TrieNode, path: Path, by_label: dict[str, tuple[str, str]]) -> int:

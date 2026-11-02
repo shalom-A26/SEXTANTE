@@ -50,6 +50,7 @@ class RunData:
     matcher: EscoMatcher
     skill_labels: dict[str, str]
     posting_skills: list[frozenset[str]]  # per matrix row
+    segment_names: dict[int, str] | None = None  # cached by insights.segment_names
 
 
 def _read_json(path: Path) -> dict[str, Any]:

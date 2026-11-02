@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -34,14 +35,28 @@ def _distribution(series: pd.Series, top: int = 8) -> list[dict[str, Any]]:
     return [{"label": label, "count": int(count)} for label, count in counts.head(top).items()]
 
 
+_TITLE_NOISE = re.compile(
+    r"\s*(?:[-–—|/(:,!¡].*$|\b(?:con o sin|con|sin) experiencia\b.*$"
+    r"|\b(?:junior|senior|sr|jr|i{1,3})\b\.?)",
+    flags=re.IGNORECASE,
+)
+
+
+def clean_title(title: str) -> str:
+    """'Asesor comercial call center - con o sin experiencia' -> 'Asesor comercial call center'."""
+    text = _TITLE_NOISE.sub("", str(title or "")).strip()
+    return text[:1].upper() + text[1:].lower() if text else ""
+
+
 def segment_names(run: RunData) -> dict[int, str]:
-    """Human label per segment: its most frequent posting title."""
+    """Human label per segment: its most frequent cleaned posting title."""
+    if run.segment_names is not None:
+        return run.segment_names
     names = {}
     for segment, titles in run.postings.groupby("cluster_id")["title"]:
-        common = titles.fillna("").str.strip().str.capitalize().value_counts()
-        names[int(segment)] = str(common.index[0]) if len(common) and common.index[0] else (
-            f"Segmento {segment}"
-        )
+        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts()
+        names[int(segment)] = str(common.index[0]) if len(common) else f"Segmento {segment}"
+    run.segment_names = names
     return names
 
 

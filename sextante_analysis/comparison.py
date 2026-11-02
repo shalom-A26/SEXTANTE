@@ -21,6 +21,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 
 SAMPLE_ROWS = 3_000
+K_SWEEP = (8, 12, 16, 20, 24)
 
 
 def _silhouette(points: np.ndarray, labels: np.ndarray) -> float | None:
@@ -65,6 +66,13 @@ def compare_clusterings(
         }
     methods["dbscan"]["eps"] = eps
 
+    # How the published K-Means would score with other segment counts.
+    k_sweep = {}
+    for candidate in K_SWEEP:
+        if candidate < size:
+            labels = KMeans(n_clusters=candidate, random_state=42, n_init=4).fit_predict(reduced)
+            k_sweep[str(candidate)] = _silhouette(reduced, labels)
+
     perplexity = float(min(30, max(2, (size - 1) / 3)))
     if size >= 5:
         embedded = TSNE(n_components=2, perplexity=perplexity, random_state=42,
@@ -77,6 +85,7 @@ def compare_clusterings(
         "sample_rows": int(size),
         "svd_components": int(components),
         "methods": methods,
+        "kmeans_k_sweep_silhouette": k_sweep,
         "tsne_perplexity": perplexity if size >= 5 else None,
         "published_method": "kmeans on full TF-IDF",
     }

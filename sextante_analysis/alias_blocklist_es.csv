@@ -1,0 +1,12 @@
+alias,esco_label,reason
+transporte,,"benefit boilerplate (auxilio de transporte), not logistics"
+operacion,,"generic word (operación), matched surgery"
+plan,,"generic word, matched 'proyecto'"
+fines,,"'para fines de', matched the Finnish language"
+asesoria,,"generic word, matched management consulting"
+marca,,"generic word, matched trademarks"
+medicina,medicamentos,"field of study, not medication handling"
+interaccion,,"generic word"
+correspondencia,,"generic word"
+conversacion,,"generic word"
+trabajar en equipo,trabajar en equipo en la industria textil,"generic teamwork mapped to a textile-specific concept"
