@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import sys
 from datetime import datetime, timezone
@@ -67,6 +68,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
             cluster_count=config.cluster_count,
             embeddings=config.embeddings,
         )
+        gc.collect()  # vectorizer vocabularies and text copies from the stages above
         matrix = sparse.load_npz(staging / "tfidf_matrix.npz").tocsr()
         postings = pd.read_parquet(staging / "postings.parquet")
         comparison = compare_clusterings(matrix, postings, staging, config.cluster_count)

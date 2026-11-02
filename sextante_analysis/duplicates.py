@@ -41,7 +41,7 @@ def find_duplicate_candidates(
         raise ValueError("threshold must be in (0, 1]")
     try:
         from datasketch import MinHash, MinHashLSH
-        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
     except ImportError as exc:  # pragma: no cover - depends on analysis setup
         raise RuntimeError("Install requirements-analysis.txt for duplicate detection") from exc
 
@@ -91,25 +91,30 @@ def find_duplicate_candidates(
     if not pairs:
         return pd.DataFrame(columns=columns)
 
-    vectorizer = TfidfVectorizer(
+    # Hashed word 1-2-grams + TF-IDF: the same cosine as a vocabulary-based
+    # TF-IDF up to rare hash collisions (2**20 buckets), without building a
+    # multi-million-entry vocabulary over the whole corpus. Only postings
+    # that take part in a candidate pair are vectorized.
+    involved = sorted({index for pair in pairs for index in pair})
+    hasher = HashingVectorizer(
         analyzer="word",
         ngram_range=(1, 2),
-        min_df=1,
-        max_features=250_000,
         strip_accents="unicode",
+        n_features=2**20,
+        alternate_sign=False,
+        norm=None,
         dtype=np.float32,
-        sublinear_tf=True,
     )
-    try:
-        matrix = vectorizer.fit_transform([texts[index] for index in indices])
-    except ValueError as exc:
-        if "empty vocabulary" in str(exc).casefold():
-            return pd.DataFrame(columns=columns)
-        raise
-    positions = {original: position for position, original in enumerate(indices)}
+    counts = hasher.transform(texts[index] for index in involved)
+    if counts.nnz == 0:
+        return pd.DataFrame(columns=columns)
+    matrix = TfidfTransformer(sublinear_tf=True).fit_transform(counts).tocsr()
+    positions = {original: position for position, original in enumerate(involved)}
     rows: list[dict[str, Any]] = []
     for left, right in sorted(pairs):
-        similarity = float(matrix[positions[left]].multiply(matrix[positions[right]]).sum())
+        similarity = min(1.0, float(
+            matrix[positions[left]].multiply(matrix[positions[right]]).sum()
+        ))  # float32 rounding can exceed 1
         if similarity < threshold:
             continue
         a, b = frame.iloc[left], frame.iloc[right]

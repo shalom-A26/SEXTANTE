@@ -118,6 +118,17 @@ class StageUnitTests(unittest.TestCase):
             plain = load_esco_csv(esco, synonyms=None)
             self.assertEqual(plain.match("Excel avanzado"), [])
 
+    def test_tfidf_sample_fit_transforms_every_text(self):
+        from sextante_analysis.features import fit_tfidf
+
+        roles = ["analista python sql", "contador nomina excel", "vendedor clientes crm"]
+        texts = [f"{roles[i % 3]} {['bogota', 'cali'][i % 2]}" for i in range(40)]
+        full_vectorizer, full = fit_tfidf(texts, max_features=100)
+        sample_vectorizer, sampled = fit_tfidf(texts, max_features=100, fit_sample=10)
+        self.assertEqual(sampled.shape[0], 40)
+        self.assertIn("python", sample_vectorizer.vocabulary_)
+        self.assertEqual(full.shape[0], sampled.shape[0])
+
     def test_wilson_interval_bounds(self):
         low, high = wilson_interval(8, 10)
         self.assertTrue(0 < low < 0.8 < high < 1)

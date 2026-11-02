@@ -41,9 +41,18 @@ def prepare_descriptions(frame: pd.DataFrame) -> list[str]:
     return (title + " . " + description).tolist()
 
 
+FIT_SAMPLE_ROWS = 120_000
+
+
 def fit_tfidf(
-    texts: list[str], max_features: int = 50_000
+    texts: list[str], max_features: int = 50_000, fit_sample: int = FIT_SAMPLE_ROWS
 ) -> tuple[TfidfVectorizer, sparse.csr_matrix]:
+    """Fit vocabulary and IDF on an evenly spaced sample, transform every text.
+
+    Counting all 1-2-grams of the full corpus before pruning to
+    ``max_features`` was the main memory cost of a run; a fixed-size sample
+    bounds it while keeping the frequent terms that survive pruning anyway.
+    """
     vectorizer = TfidfVectorizer(
         strip_accents="unicode",
         lowercase=True,
@@ -55,7 +64,11 @@ def fit_tfidf(
         sublinear_tf=True,
         dtype=np.float32,
     )
-    return vectorizer, vectorizer.fit_transform(texts)
+    if len(texts) <= fit_sample:
+        return vectorizer, vectorizer.fit_transform(texts)
+    sample = np.linspace(0, len(texts) - 1, fit_sample, dtype=int)
+    vectorizer.fit([texts[index] for index in sample])
+    return vectorizer, vectorizer.transform(texts)
 
 
 def _top_terms(vectorizer: TfidfVectorizer, values: np.ndarray, count: int = 12) -> list[str]:
@@ -82,7 +95,8 @@ def run_models(
     if len(nonempty) < 3:
         raise ValueError("At least three non-empty vacancy texts are required")
     working = frame.iloc[nonempty].reset_index(drop=True)
-    vectorizer, matrix = fit_tfidf([texts[index] for index in nonempty], max_features)
+    texts = [texts[index] for index in nonempty]
+    vectorizer, matrix = fit_tfidf(texts, max_features)
     if matrix.shape[1] < 2:
         raise ValueError("Text corpus has fewer than two usable terms")
     k_topics = min(topic_count, max(2, min(matrix.shape[0] - 1, matrix.shape[1] - 1)))
@@ -176,7 +190,7 @@ def run_models(
         model_revision = "b8ef00830037f9868450f778081ea683e900fe39"
         model = SentenceTransformer(model_id, revision=model_revision)
         vectors = model.encode(
-            [texts[index] for index in nonempty],
+            texts,
             batch_size=64,
             show_progress_bar=True,
             normalize_embeddings=True,
