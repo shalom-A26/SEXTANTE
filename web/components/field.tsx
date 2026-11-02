@@ -21,9 +21,11 @@ const LAYERS = [
   { color: "#5e2420", width: 2.2, opacity: 0.95 },
 ];
 
+const BANDS = 6; // horizontal slices per depth layer, so the wind can move them out of phase
+
 function blades() {
   const rand = prng(1453);
-  const paths = LAYERS.map(() => [] as string[]);
+  const groups = LAYERS.map(() => Array.from({ length: BANDS }, () => [] as string[]));
   for (let i = 0; i < 760; i++) {
     const depth = Math.pow(rand(), 1.6); // more blades far away
     const y = HORIZON + 6 + depth * (H - HORIZON);
@@ -31,11 +33,12 @@ function blades() {
     const height = 8 + depth * 120 * (0.6 + rand() * 0.6);
     const lean = (rand() - 0.35) * height * 0.55; // wind from the left
     const layer = Math.min(LAYERS.length - 1, Math.floor(depth * LAYERS.length));
-    paths[layer].push(
+    const band = Math.min(BANDS - 1, Math.floor((x / W) * BANDS));
+    groups[layer][band].push(
       `M${x.toFixed(1)} ${y.toFixed(1)}Q${(x + lean * 0.3).toFixed(1)} ${(y - height * 0.6).toFixed(1)} ${(x + lean).toFixed(1)} ${(y - height).toFixed(1)}`,
     );
   }
-  return paths.map((p) => p.join(""));
+  return groups.map((bands) => bands.map((paths) => paths.join("")));
 }
 
 const BLADES = blades();
@@ -65,14 +68,17 @@ export function DuskField() {
         </linearGradient>
       </defs>
       <rect width={W} height={HORIZON} fill="url(#sky)" />
-      <ellipse cx={W / 2} cy={HORIZON} rx={W * 0.55} ry={220} fill="url(#sun)" />
+      <ellipse className="sun" cx={W / 2} cy={HORIZON} rx={W * 0.55} ry={220} fill="url(#sun)" />
       <path d={`M0 ${HORIZON - 18} Q 360 ${HORIZON - 34} 820 ${HORIZON - 14} T ${W} ${HORIZON - 22} V ${HORIZON} H 0 Z`} fill="#b86f6c" opacity="0.5" />
       <rect y={HORIZON} width={W} height={H - HORIZON} fill="url(#ground)" />
       <rect y={HORIZON} width={W} height={60} fill="url(#haze)" />
-      {BLADES.map((d, i) => (
-        <path key={i} d={d} stroke={LAYERS[i].color} strokeWidth={LAYERS[i].width} opacity={LAYERS[i].opacity}
-          fill="none" strokeLinecap="round" />
+      {BLADES.map((bands, layer) => (
+        <g key={layer} className="blades" data-layer={layer} stroke={LAYERS[layer].color}
+          strokeWidth={LAYERS[layer].width} opacity={LAYERS[layer].opacity} fill="none" strokeLinecap="round">
+          {bands.map((d, band) => d && <path key={band} className="blade" d={d} />)}
+        </g>
       ))}
+      <rect className="dusk-shade" width={W} height={H} fill="#2e1211" opacity="0" />
     </svg>
   );
 }
@@ -97,7 +103,7 @@ export function GlowFigure() {
           <stop offset="1" stopColor="#ffd9c2" stopOpacity="0.2" />
         </linearGradient>
       </defs>
-      <g filter="url(#glow)" fill="url(#body)">
+      <g className="figure-body" filter="url(#glow)" fill="url(#body)">
         <ellipse cx="60" cy="30" rx="15" ry="18" />
         <rect x="53" y="44" width="14" height="12" rx="5" />
         <path d="M30 62 Q60 50 90 62 L94 150 Q86 158 80 150 L78 96 L76 160 L42 160 L42 96 L40 150 Q34 158 26 150 Z" />
@@ -126,9 +132,14 @@ export function SextantScale() {
   return (
     <svg className="scale" viewBox="0 0 1000 1000" aria-hidden="true">
       <g stroke="rgba(255,241,236,0.38)" fill="none">
-        <circle cx={cx} cy={cy} r={r} strokeWidth="1" />
-        <circle cx={cx} cy={cy} r={r + 150} strokeWidth="0.8" opacity="0.6" />
-        {ticks}
+        <circle className="scale-ring" cx={cx} cy={cy} r={r} strokeWidth="1" />
+        <circle className="scale-ring" cx={cx} cy={cy} r={r + 150} strokeWidth="0.8" opacity="0.6" />
+        <g className="ticks">{ticks}</g>
+      </g>
+      {/* Index arm: the sextant's moving needle. */}
+      <g className="needle" stroke="rgba(255,226,200,0.7)">
+        <line x1={cx} y1={cy} x2={cx} y2={cy - r - 26} strokeWidth="1.2" />
+        <circle cx={cx} cy={cy - r - 30} r="4" fill="#ffe2c8" stroke="none" />
       </g>
     </svg>
   );

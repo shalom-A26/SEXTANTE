@@ -7,7 +7,7 @@
 | Part | Path | Role |
 |---|---|---|
 | API | `sextante_api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
-| Web | `web/` (Next.js 16, React 19, no UI framework) | Landing, dashboard with three perspectives, CV flow |
+| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP) | Landing, dashboard with three perspectives, CV flow |
 
 ## Running locally
 
@@ -63,6 +63,32 @@ docker run -p 8000:8000 -e SEXTANTE_HF_REPO=pxtron/vacantes-colombia \
 
 Without `SEXTANTE_HF_REPO` the container builds and serves a synthetic demo
 run.
+
+## Web: components and motion
+
+- **shadcn/ui** (`web/components/ui/`, radix-nova style). Its CSS variables are
+  mapped to the dusk palette in `app/globals.css`. The page's own tokens are
+  prefixed `--sx-*` so they don't collide with shadcn's `--muted`,
+  `--accent` and `--radius`. The hand-written CSS stays unlayered so it wins
+  over Tailwind's preflight.
+- **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
+  ScrollToPlugin, SplitText and DrawSVG once and exports these primitives:
+  `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
+- **Landing.** One orchestrated entrance: the dusk settles, the grass grows,
+  the title rises word by word, the sextant draws itself and the figure
+  lights up. After that the grass sways in the wind, the needle drifts and
+  the scene follows the mouse with depth. On scroll, the statement lights up
+  word by word and "Cómo funciona" pins while a light runs along the steps.
+- **Dashboard and CV.**
+  - KPIs count up and bars grow.
+  - The graph draws its edges.
+  - Tabs have a sliding indicator.
+  - Results cascade in and meters fill up.
+- **Page transitions:** a veil in `app/template.tsx`.
+- **Reduced motion:** everything runs inside
+  `gsap.matchMedia("(prefers-reduced-motion: no-preference)")`. With reduced
+  motion the page is static and complete. Mouse parallax runs only with a
+  fine pointer.
 
 ## Deployment
 
