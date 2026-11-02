@@ -10,12 +10,6 @@ const audiences = [
   ["Si formas talento", "Ve qué piden las empresas según el nivel educativo y dónde están las brechas."],
 ];
 
-const steps = [
-  ["Reunimos vacantes", "Del Servicio Público de Empleo y de portales como LinkedIn e Indeed, en un formato común."],
-  ["Leemos la descripción", "Extraemos habilidades con la taxonomía europea ESCO y detectamos vacantes duplicadas."],
-  ["Agrupamos perfiles", "Formamos segmentos ocupacionales por lo que piden las vacantes, no por su título."],
-  ["Medimos señales", "Estimamos salarios y trazamos rutas entre ocupaciones a partir de habilidades compartidas."],
-];
 
 export function About() {
   const ref = useRef<HTMLElement>(null);
@@ -71,54 +65,6 @@ export function About() {
           <strong>Indeed</strong>
         </div>
       </div>
-    </section>
-  );
-}
-
-export function HowItWorks() {
-  const ref = useRef<HTMLElement>(null);
-  useGSAP(() => {
-    const mm = gsap.matchMedia();
-    const q = gsap.utils.selector(ref);
-
-    // Wide screens: the section pins and a light runs along the four steps.
-    mm.add(`${MOTION_OK} and (min-width: 961px)`, () => {
-      const items = q(".how li");
-      const tl = gsap.timeline({
-        scrollTrigger: { trigger: ref.current, start: "top top", end: "+=1600", pin: true, scrub: 0.7 },
-      });
-      tl.from(q(".how-title"), { yPercent: 40, opacity: 0, duration: 0.6 })
-        .fromTo(q(".how-progress"), { scaleX: 0 }, { scaleX: 1, ease: "none", duration: items.length }, 0.4);
-      items.forEach((item, i) => {
-        tl.fromTo(item, { opacity: 0.18, y: 30 }, { opacity: 1, y: 0, duration: 0.6 }, 0.4 + i)
-          .fromTo(item.querySelector(".step-n"), { scale: 0.4, color: "#fbf1ec" },
-            { scale: 1, color: "#f7a24b", duration: 0.5, ease: "back.out(3)" }, 0.5 + i);
-      });
-      tl.to({}, { duration: 0.6 });
-    });
-
-    // Narrow screens: steps simply rise into view.
-    mm.add(`${MOTION_OK} and (max-width: 960px)`, () => {
-      gsap.from(q(".how li"), {
-        y: 40, opacity: 0, duration: 1, stagger: 0.12,
-        scrollTrigger: { trigger: q(".how ol"), start: "top 85%", once: true },
-      });
-    });
-  }, { scope: ref });
-
-  return (
-    <section className="how" id="como-funciona" ref={ref}>
-      <h2 className="how-title">Cómo funciona</h2>
-      <div className="how-track"><span className="how-progress" /></div>
-      <ol>
-        {steps.map(([title, body], i) => (
-          <li key={title}>
-            <span className="step-n">{i + 1}</span>
-            <h3>{title}</h3>
-            <p>{body}</p>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }

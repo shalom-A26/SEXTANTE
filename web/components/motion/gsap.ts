@@ -4,11 +4,12 @@
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
+import { ScrambleTextPlugin } from "gsap/ScrambleTextPlugin";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 
-gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollToPlugin, SplitText, DrawSVGPlugin);
+gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollToPlugin, ScrambleTextPlugin, SplitText, DrawSVGPlugin);
 gsap.defaults({ ease: "expo.out", duration: 1 });
 // Some animated pieces render conditionally (empty lists, loading states).
 gsap.config({ nullTargetWarn: false });

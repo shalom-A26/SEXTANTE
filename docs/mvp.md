@@ -72,13 +72,30 @@ run.
   `--accent` and `--radius`. The hand-written CSS stays unlayered so it wins
   over Tailwind's preflight.
 - **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
-  ScrollToPlugin, SplitText and DrawSVG once and exports these primitives:
+  ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
 - **Landing.** One orchestrated entrance: the dusk settles, the grass grows,
   the title rises word by word, the sextant draws itself and the figure
   lights up. After that the grass sways in the wind, the needle drifts and
   the scene follows the mouse with depth. On scroll, the statement lights up
-  word by word and "Cómo funciona" pins while a light runs along the steps.
+  word by word.
+- **"Cómo funciona"** (`web/components/how-it-works/`). A scroll walkthrough
+  of the nine real stages: capture, cleaning, ESCO skills, duplicates,
+  TF-IDF, segments, salary, graph and CV. `steps.ts` holds each stage's
+  explanation, what happens inside, its algorithm (formula or pseudocode) and
+  live figures read from `/api/dashboard`. `visuals.tsx` holds one animated
+  scene per stage. The scene sits in a sticky frame on wide screens and
+  changes as each step crosses the viewport. On narrow screens, or with
+  reduced motion, each static scene sits above its text.
+- **System backdrop** (`web/components/system-backdrop.tsx`). A fixed, faint
+  layer behind every page: rows of top skills, segment names and pipeline
+  terms drifting by, plus a skill-graph constellation with scroll parallax.
+  It is decorative (`aria-hidden`, no pointer events) and pauses while the
+  tab is hidden.
+- **One dashboard request.** `getDashboard()` memoizes its promise, so the
+  hero, backdrop, walkthrough and dashboard share a single fetch.
+- **Logo:** `docs/assets/logo.svg`, also used as the favicon
+  (`web/app/icon.svg`).
 - **Dashboard and CV.**
   - KPIs count up and bars grow.
   - The graph draws its edges.

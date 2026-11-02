@@ -22,8 +22,8 @@ export type Dashboard = {
     with_salary: number;
     segments: number;
     skills_detected: number;
-    skill_mentions: number;
-    duplicate_candidates: number;
+    skill_mentions: number | null;
+    duplicate_candidates: number | null;
     sources: Count[];
     cities: Count[];
     modality: Count[];
@@ -95,10 +95,19 @@ export type CvResult = {
   method: string;
 };
 
-export async function getDashboard(): Promise<Dashboard> {
-  const response = await fetch(`${API_URL}/api/dashboard`);
-  if (!response.ok) throw new Error(`API ${response.status}`);
-  return response.json();
+// One shared request per page load: hero, backdrop, "Cómo funciona" and the
+// dashboard all read the same ~0.5 MB payload. A failed request is not cached.
+let dashboardRequest: Promise<Dashboard> | null = null;
+
+export function getDashboard(): Promise<Dashboard> {
+  dashboardRequest ??= fetch(`${API_URL}/api/dashboard`).then((response) => {
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    return response.json() as Promise<Dashboard>;
+  }).catch((error: Error) => {
+    dashboardRequest = null;
+    throw error;
+  });
+  return dashboardRequest;
 }
 
 export async function matchCv(form: FormData): Promise<CvResult> {
