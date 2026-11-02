@@ -1,6 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+
+import { CountUp } from "@/components/motion";
+import { gsap, MOTION_OK, useGSAP } from "@/components/motion/gsap";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+/** Runs `animate` once the element scrolls into view (skipped with reduced motion). */
+function useEntrance<T extends Element>(animate: (q: (selector: string) => Element[], root: T) => void,
+  deps: unknown[] = []) {
+  const ref = useRef<T>(null);
+  useGSAP(() => {
+    if (!ref.current) return;
+    gsap.matchMedia().add(MOTION_OK, () => animate(gsap.utils.selector(ref), ref.current!));
+  }, { dependencies: deps, scope: ref });
+  return ref;
+}
 
 // Warm-leaning but hue-separated so 8-10 segments stay distinguishable on burgundy.
 export const PALETTE = [
@@ -16,17 +31,30 @@ export function BarList({ data, format = (v) => v.toLocaleString("es-CO"), max }
   max?: number;
 }) {
   const top = max ?? Math.max(...data.map((d) => d.value), 1);
+  const ref = useEntrance<HTMLUListElement>((q, root) => {
+    gsap.timeline({ scrollTrigger: { trigger: root, start: "top 90%", once: true } })
+      .from(q("li"), { x: -16, opacity: 0, duration: 0.7, stagger: 0.05 })
+      .from(q(".barlist-fill"), { scaleX: 0, transformOrigin: "0% 50%", duration: 1.4, stagger: 0.05 }, 0.1);
+  }, [data]);
   return (
-    <ul className="barlist">
-      {data.map((d) => (
-        <li key={d.label} title={d.hint}>
-          <span className="barlist-label">{d.label}</span>
-          <span className="barlist-track">
-            <span className="barlist-fill" style={{ width: `${(100 * d.value) / top}%` }} />
-          </span>
-          <span className="barlist-value">{format(d.value)}</span>
-        </li>
-      ))}
+    <ul className="barlist" ref={ref}>
+      {data.map((d) => {
+        const row = (
+          <li key={d.label}>
+            <span className="barlist-label">{d.label}</span>
+            <span className="barlist-track">
+              <span className="barlist-fill" style={{ width: `${(100 * d.value) / top}%` }} />
+            </span>
+            <span className="barlist-value"><CountUp value={d.value} format={format} duration={1.4} /></span>
+          </li>
+        );
+        return d.hint ? (
+          <Tooltip key={d.label}>
+            <TooltipTrigger asChild>{row}</TooltipTrigger>
+            <TooltipContent side="top">{d.label}: {d.hint}</TooltipContent>
+          </Tooltip>
+        ) : row;
+      })}
     </ul>
   );
 }
@@ -49,12 +77,24 @@ export function Scatter({ points, names }: {
       clusters: [...new Set(points.map((p) => p.cluster_id))].sort((a, b) => a - b),
     };
   }, [points]);
+  const ref = useEntrance<HTMLDivElement>((q, root) => {
+    gsap.from(q("circle"), {
+      scale: 0, opacity: 0, transformOrigin: "50% 50%", duration: 0.9, ease: "back.out(2.5)",
+      stagger: { amount: 1.6, from: "random" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
+    });
+    gsap.from(q(".legend button"), {
+      y: 10, opacity: 0, stagger: 0.05, duration: 0.6,
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
+    });
+  }, [points]);
   return (
-    <div>
+    <div ref={ref}>
       <svg viewBox="0 0 600 360" className="chart" role="img" aria-label="Proyección 2D de vacantes por segmento">
         {scaled.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={hover === null || hover === p.c ? 3 : 2}
-            fill={PALETTE[p.c % PALETTE.length]} opacity={hover === null || hover === p.c ? 0.75 : 0.12} />
+            fill={PALETTE[p.c % PALETTE.length]} fillOpacity={hover === null || hover === p.c ? 0.75 : 0.12}
+            style={{ transition: "r 0.3s, fill-opacity 0.3s" }} />
         ))}
       </svg>
       <div className="legend">
@@ -97,23 +137,33 @@ export function SkillGraph({ nodes, edges }: {
   const neighbours = new Set(
     focus ? edges.flatMap((e) => (e.source === focus ? [e.target] : e.target === focus ? [e.source] : [])) : [],
   );
+  const ref = useEntrance<SVGSVGElement>((q, root) => {
+    gsap.timeline({ scrollTrigger: { trigger: root, start: "top 80%", once: true } })
+      .from(q(".edge"), { drawSVG: 0, duration: 1.6, stagger: { amount: 1.2, from: "random" }, ease: "power2.inOut" })
+      .from(q(".node circle"), {
+        scale: 0, transformOrigin: "50% 50%", duration: 0.8, ease: "back.out(3)", stagger: { amount: 1, from: "center" },
+      }, 0.3)
+      .from(q(".node-label"), { opacity: 0, y: 6, duration: 0.6, stagger: 0.02 }, 1.1);
+  }, [nodes]);
   return (
-    <svg viewBox="0 0 720 520" className="chart" role="img" aria-label="Grafo de co-ocurrencia de habilidades">
+    <svg viewBox="0 0 720 520" className="chart" role="img" aria-label="Grafo de co-ocurrencia de habilidades" ref={ref}>
       {edges.map((e, i) => {
         const a = layout[e.source];
         const b = layout[e.target];
         if (!a || !b) return null;
         const active = !focus || e.source === focus || e.target === focus;
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ecc0a8"
-          strokeWidth={0.4 + (2 * e.weight) / maxWeight} opacity={active ? 0.35 : 0.04} />;
+        return <line key={i} className="edge" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ecc0a8"
+          strokeWidth={0.4 + (2 * e.weight) / maxWeight} strokeOpacity={active ? 0.35 : 0.04}
+          style={{ transition: "stroke-opacity 0.3s" }} />;
       })}
       {nodes.map((n) => {
         const p = layout[n.esco_uri];
         const active = !focus || focus === n.esco_uri || neighbours.has(n.esco_uri);
         const r = 4 + 10 * Math.sqrt(n.pagerank / maxRank);
         return (
-          <g key={n.esco_uri} onMouseEnter={() => setFocus(n.esco_uri)} onMouseLeave={() => setFocus(null)}
-            opacity={active ? 1 : 0.2} style={{ cursor: "pointer" }}>
+          <g key={n.esco_uri} className="node" onMouseEnter={() => setFocus(n.esco_uri)}
+            onMouseLeave={() => setFocus(null)} fillOpacity={active ? 1 : 0.2}
+            style={{ cursor: "pointer", transition: "fill-opacity 0.3s" }}>
             <circle cx={p.x} cy={p.y} r={r} fill={PALETTE[n.community % PALETTE.length]} />
             {(r > 8 || focus === n.esco_uri || neighbours.has(n.esco_uri)) && (
               <text x={p.x} y={p.y - r - 3} textAnchor="middle" className="node-label">{n.skill_label}</text>
@@ -127,10 +177,16 @@ export function SkillGraph({ nodes, edges }: {
 
 export function Meter({ value, label }: { value: number; label?: string }) {
   const tone = value >= 70 ? "good" : value >= 45 ? "mid" : "low";
+  const ref = useEntrance<HTMLSpanElement>((q, root) => {
+    gsap.from(q(".meter-fill"), {
+      scaleX: 0, transformOrigin: "0% 50%", duration: 1.5, ease: "power3.out",
+      scrollTrigger: { trigger: root, start: "top 95%", once: true },
+    });
+  }, [value]);
   return (
-    <span className={`meter meter-${tone}`} aria-label={label ?? `${value}%`}>
-      <span style={{ width: `${Math.max(2, Math.min(100, value))}%` }} />
-      <b>{value.toFixed(0)}%</b>
+    <span className={`meter meter-${tone}`} aria-label={label ?? `${value}%`} ref={ref}>
+      <span className="meter-fill" style={{ width: `${Math.max(2, Math.min(100, value))}%` }} />
+      <b><CountUp value={value} format={(v) => `${v.toFixed(0)}%`} duration={1.5} /></b>
     </span>
   );
 }

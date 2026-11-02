@@ -3,8 +3,11 @@ import { Hanken_Grotesk } from "next/font/google";
 import Link from "next/link";
 
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-const grotesk = Hanken_Grotesk({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font" });
+const grotesk = Hanken_Grotesk({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "SEXTANTE: el mercado laboral colombiano, leído desde el texto",
@@ -25,8 +28,9 @@ function Glyph() {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={grotesk.variable}>
+    <html lang="es" className={cn("dark", grotesk.variable)}>
       <body>
+        <TooltipProvider delayDuration={120}>
         <header className="topbar">
           <nav className="nav-left">
             <Link href="/dashboard">Dashboard</Link>
@@ -42,6 +46,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Proyecto académico de la Universidad Tecnológica de Bolívar con vacantes públicas del SPE y portales de empleo.
           Tu CV se procesa en memoria y no se guarda.
         </footer>
+        <Toaster position="bottom-right" />
+        </TooltipProvider>
       </body>
     </html>
   );
