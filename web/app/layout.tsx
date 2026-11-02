@@ -3,6 +3,7 @@ import { Hanken_Grotesk } from "next/font/google";
 import Link from "next/link";
 
 import "./globals.css";
+import { SystemBackdrop } from "@/components/system-backdrop";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className={cn("dark", grotesk.variable)}>
       <body>
         <TooltipProvider delayDuration={120}>
+        <SystemBackdrop />
         <header className="topbar">
           <nav className="nav-left">
             <Link href="/dashboard">Dashboard</Link>

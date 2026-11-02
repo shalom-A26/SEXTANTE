@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/logo.svg" alt="SEXTANTE logo" width="96"></p>
+
 # SEXTANTE
 
 **System for skill extraction, occupational segmentation, salary estimation
