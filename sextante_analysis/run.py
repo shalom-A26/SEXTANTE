@@ -19,11 +19,11 @@ from scipy import sparse
 
 from . import __version__
 from .artifacts import publish_run, sha256_file, write_json, write_manifest
-from .cleaning import repair_frame
+from .cleaning import normalize_departments, repair_frame
 from .comparison import compare_clusterings
 from .config import AnalysisConfig
 from .corpus import load_corpus
-from .duplicates import find_duplicate_candidates
+from .duplicates import duplicate_groups, find_duplicate_candidates
 from .eda import summarize
 from .features import run_models
 from .graph import build_graphs
@@ -62,6 +62,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
     with TemporaryDirectory(prefix=f".{run_id}.", dir=config.output_root) as staging_name:
         staging = Path(staging_name)
         repaired_cells = repair_frame(frame)
+        normalized_departments = normalize_departments(frame)
         write_json(staging / "eda.json", summarize(frame))
         matcher = load_esco_csv(taxonomy_path)
         skills = extract_skills(frame, matcher)
@@ -124,8 +125,10 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
             },
             "results": {
                 "repaired_text_cells": repaired_cells,
+                "normalized_departments": normalized_departments,
                 "skill_mentions": int(len(skills)),
                 "duplicate_candidates": int(len(duplicates)),
+                **duplicate_groups(duplicates),
                 **model_info,
                 "clustering_comparison": comparison["methods"],
                 "supervised": {

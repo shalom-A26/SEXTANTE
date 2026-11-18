@@ -68,8 +68,13 @@ export const STEPS: Step[] = [
       "Los candidatos se confirman con similitud coseno sobre TF-IDF.",
     ],
     algorithm: "J(A,B) ≈ P[minhash(A) = minhash(B)]\ncandidatos = LSH(firmas, bandas)\nduplicado ⇔ cos(tfidf_A, tfidf_B) ≥ umbral",
-    metrics: (d) => d.overview.duplicate_candidates
-      ? [{ label: "pares candidatos", value: d.overview.duplicate_candidates }] : [],
+    metrics: (d) => d.overview.duplicate_postings
+      ? [
+        { label: "vacantes con posible duplicado", value: d.overview.duplicate_postings },
+        { label: "grupos de duplicados", value: d.overview.duplicate_groups ?? 0 },
+      ]
+      : d.overview.duplicate_candidates
+        ? [{ label: "pares candidatos", value: d.overview.duplicate_candidates }] : [],
   },
   {
     key: "tfidf",

@@ -83,6 +83,19 @@ the run is uploaded to `derived/runs/<run_id>/` in the same private dataset;
 The existing capture workflow uploads only `data/spe/`, `data/jobspy/`, and
 the dataset card, so it does not overwrite derived outputs.
 
+Before any stage, the run repairs double-encoded text (`cleaning.repair_frame`)
+and maps department spellings onto the 33 SPE names
+(`cleaning.normalize_departments`: Indeed codes such as `ANT`/`VAC`, LinkedIn
+title case and "Capital District"; a Bogotá city always maps to
+`BOGOTÁ, D.C.`). Source rows on HF are never modified. TF-IDF drops
+schedule/benefit boilerplate and recruiting-marketing template words
+(`features.BOILERPLATE_STOP_WORDS`). Segments are named after their most
+common title only when it covers at least 5% of the segment; otherwise they
+are labeled `Varios: <top terms>`, and repeated names get a distinguishing
+term. The manifest reports `duplicate_postings` and `duplicate_groups`
+(pairs linked transitively; lower bounds because candidate pairs are
+sampled) next to the raw `duplicate_candidates` pair count.
+
 Each run includes:
 
 | Artifact | Contents |

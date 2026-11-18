@@ -49,6 +49,14 @@ BOILERPLATE_STOP_WORDS = frozenset({
     "perfil", "persona", "personal", "candidato", "interesados", "hoja", "vida", "enviar",
     "correo", "ciudad", "sede", "nivel", "formacion", "academica", "trabajo", "trabajar",
     "con", "sin", "nuestro", "nuestra", "equipo",
+    # Recruiting-marketing templates, found in sentences repeated across
+    # thousands of postings of unrelated occupations ("esta oportunidad es
+    # para ti", "juntos generaremos oportunidades", "siente el feeling"):
+    # without them two segments were named after a job-board template.
+    "oportunidad", "oportunidades", "generaremos", "juntos", "reto", "retos", "feeling",
+    "siente", "pertenecer", "proposito", "brechas", "esperas", "unete", "unirte",
+    "nosotros", "crecer", "crecimiento", "proyeccion", "mision", "buscas", "ofrecemos",
+    "necesitas", "lugar", "talento", "queremos", "tomar", "nuevo", "ti", "tu", "tus",
 })
 TOKEN_PATTERN = r"(?u)\b[^\W\d_]{2,}\b"  # letters only: drops "000", "30", "2026"
 

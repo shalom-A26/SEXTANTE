@@ -30,6 +30,8 @@ export type Dashboard = {
     skills_detected: number;
     skill_mentions: number | null;
     duplicate_candidates: number | null;
+    duplicate_postings?: number | null;
+    duplicate_groups?: number | null;
     sources: Count[];
     cities: Count[];
     modality: Count[];

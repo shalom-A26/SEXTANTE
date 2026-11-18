@@ -48,14 +48,38 @@ def clean_title(title: str) -> str:
     return text[:1].upper() + text[1:].lower() if text else ""
 
 
+# A segment is named after its most common title only when that title covers
+# this share of it; below, the segment mixes occupations and says so.
+MIN_NAME_SHARE = 0.05
+
+
 def segment_names(run: RunData) -> dict[int, str]:
-    """Human label per segment: its most frequent cleaned posting title."""
+    """Unique human label per segment.
+
+    The most frequent cleaned title names the segment; mixed segments become
+    "Varios: <top terms>", and repeated names get the first distinctive term
+    that tells them apart (larger segments keep the plain name).
+    """
     if run.segment_names is not None:
         return run.segment_names
-    names = {}
-    for segment, titles in run.postings.groupby("cluster_id")["title"]:
-        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts()
-        names[int(segment)] = str(common.index[0]) if len(common) else f"Segmento {segment}"
+    terms = {int(segment): [t for t in str(value).split(" | ") if t]
+             for segment, value in run.segment_profiles.set_index("cluster_id")["terms"].items()}
+    groups = sorted(run.postings.groupby("cluster_id")["title"], key=lambda item: -len(item[1]))
+    names: dict[int, str] = {}
+    for segment, titles in groups:
+        segment = int(segment)
+        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts(normalize=True)
+        top_terms = terms.get(segment, [])
+        if len(common) and common.iloc[0] >= MIN_NAME_SHARE:
+            name = str(common.index[0])
+        elif top_terms:
+            name = "Varios: " + ", ".join(top_terms[:3])
+        else:
+            name = f"Segmento {segment}"
+        if name in names.values():
+            extra = next((t for t in top_terms if t.lower() not in name.lower()), str(segment))
+            name = f"{name} · {extra}"
+        names[segment] = name
     run.segment_names = names
     return names
 
@@ -137,6 +161,8 @@ def dashboard(run: RunData) -> dict[str, Any]:
             "skills_detected": int(len(run.skill_labels)),
             "skill_mentions": run.manifest.get("results", {}).get("skill_mentions"),
             "duplicate_candidates": run.manifest.get("results", {}).get("duplicate_candidates"),
+            "duplicate_postings": run.manifest.get("results", {}).get("duplicate_postings"),
+            "duplicate_groups": run.manifest.get("results", {}).get("duplicate_groups"),
             "sources": _distribution(postings["source"]),
             "cities": _distribution(postings["city"], 10),
             "modality": _distribution(postings["work_modality"], 5),

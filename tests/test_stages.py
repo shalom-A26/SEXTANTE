@@ -186,3 +186,50 @@ class StageUnitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DataQualityTests(unittest.TestCase):
+    def test_departments_map_codes_case_and_bogota(self):
+        from sextante_analysis.cleaning import normalize_departments
+
+        frame = pd.DataFrame({
+            "department": ["ANT", "Antioquia", "VAC", "CUN", "Capital District", "Quindío",
+                           "VACANTES PARA TODO EL TERRITORIO", None],
+            "city": ["Medellín", "Envigado", "Cali", "Bogotá", "Bogota", "Armenia", None, None],
+        })
+        changed = normalize_departments(frame)
+        self.assertEqual(frame["department"].iloc[:7].tolist(), [
+            "ANTIOQUIA", "ANTIOQUIA", "VALLE DEL CAUCA", "BOGOTÁ, D.C.", "BOGOTÁ, D.C.",
+            "QUINDIO", "VACANTES PARA TODO EL TERRITORIO"])
+        self.assertTrue(pd.isna(frame["department"].iloc[7]))
+        self.assertEqual(changed, 6)
+
+    def test_duplicate_groups_link_pairs_transitively(self):
+        from sextante_analysis.duplicates import duplicate_groups
+
+        pairs = pd.DataFrame({"source_a": ["spe", "spe", "indeed"],
+                              "vacancy_id_a": ["1", "2", "9"],
+                              "source_b": ["spe", "spe", "indeed"],
+                              "vacancy_id_b": ["2", "3", "8"]})
+        self.assertEqual(duplicate_groups(pairs),
+                         {"duplicate_postings": 5, "duplicate_groups": 2})
+        self.assertEqual(duplicate_groups(pairs.iloc[:0])["duplicate_postings"], 0)
+
+    def test_segment_names_are_unique_and_flag_mixed_segments(self):
+        from types import SimpleNamespace
+
+        from sextante_api.insights import segment_names
+
+        titles = (["Coordinador"] * 10 + ["Coordinador"] * 6 + ["Auxiliar SST"] * 4
+                  + [f"Cargo {i}" for i in range(40)])
+        clusters = [0] * 10 + [1] * 10 + [2] * 40
+        run = SimpleNamespace(
+            segment_names=None,
+            postings=pd.DataFrame({"cluster_id": clusters, "title": titles}),
+            segment_profiles=pd.DataFrame({"cluster_id": [0, 1, 2], "terms": [
+                "gestion | proyectos", "sst | seguridad", "servicio | obra | cliente"]}),
+        )
+        names = segment_names(run)
+        self.assertEqual(names[2], "Varios: servicio, obra, cliente")
+        self.assertEqual(names[0], "Coordinador")
+        self.assertEqual(names[1], "Coordinador · sst")

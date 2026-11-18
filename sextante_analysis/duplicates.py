@@ -126,3 +126,25 @@ def find_duplicate_candidates(
     return pd.DataFrame(rows, columns=columns).sort_values(
         "similarity", ascending=False, kind="stable"
     ).reset_index(drop=True)
+
+
+def duplicate_groups(pairs: pd.DataFrame) -> dict[str, int]:
+    """Postings involved in a duplicate pair and the groups they form.
+
+    Pairs are linked transitively (connected components). Candidate pairs are
+    capped by reservoir sampling, so on a large corpus both figures are lower
+    bounds.
+    """
+    if pairs.empty:
+        return {"duplicate_postings": 0, "duplicate_groups": 0}
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    left = list(zip(pairs["source_a"].astype(str), pairs["vacancy_id_a"].astype(str), strict=True))
+    right = list(zip(pairs["source_b"].astype(str), pairs["vacancy_id_b"].astype(str), strict=True))
+    ids = {key: index for index, key in enumerate(dict.fromkeys(left + right))}
+    rows = [ids[key] for key in left]
+    cols = [ids[key] for key in right]
+    graph = coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(len(ids), len(ids)))
+    groups, _ = connected_components(graph, directed=False)
+    return {"duplicate_postings": len(ids), "duplicate_groups": int(groups)}
