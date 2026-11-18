@@ -59,9 +59,17 @@ unless `SEXTANTE_USE_HF=1` is set:
 
 ### Running on GitHub Actions
 
-`.github/workflows/analytics.yml` (manual, `workflow_dispatch`) runs the same
-command on a GitHub runner with the repository's `HF_TOKEN` secret and
-reports wall time and peak memory in the step summary. The ESCO CSV comes
+`.github/workflows/analytics.yml` runs the same command on a GitHub runner
+with the repository's `HF_TOKEN` secret and reports wall time and peak
+memory in the step summary. It runs **daily at 06:00 UTC** (01:00 Colombia,
+after the 04:23 UTC SPE capture) with `--clusters 16 --upload`, and can be
+dispatched manually. After a full uploaded run it calls the Render deploy hook
+(`RENDER_DEPLOY_HOOK_URL` repository secret) so the API restarts and serves
+the new `derived/latest.json`; without the secret it only warns. Once a day on
+purpose: each published run adds ~0.5 GB to the dataset's git history. While
+it holds the `hf-upload` group (~46 min) at most one JobSpy capture waits and
+the one behind it is cancelled by GitHub; the next capture picks those
+postings up. The ESCO CSV comes
 from the GitHub release
 [`taxonomy-esco-v1.2.1`](https://github.com/shalom-A26/SEXTANTE/releases/tag/taxonomy-esco-v1.2.1)
 (unmodified official files with EU attribution, verified by SHA-256); set

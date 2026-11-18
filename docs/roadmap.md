@@ -70,8 +70,6 @@ terms at k=16–20, then run with `upload=true`.
 5. **Optional improvements**
    - Grow `synonyms_es.csv` with misses found in manual review.
    - Use sentence embeddings in CV matching when `--embeddings` was run.
-   - Schedule the analytics run (weekly workflow) once (1) shows it fits a
-     GitHub runner's time/memory.
    - Stage 7 (Spark): not needed while a full run fits in memory; revisit
      only if (1) shows otherwise.
    - Word2Vec/UMAP into batch if the course evaluation requires them there.
