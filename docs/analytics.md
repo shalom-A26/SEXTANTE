@@ -59,9 +59,17 @@ unless `SEXTANTE_USE_HF=1` is set:
 
 ### Running on GitHub Actions
 
-`.github/workflows/analytics.yml` (manual, `workflow_dispatch`) runs the same
-command on a GitHub runner with the repository's `HF_TOKEN` secret and
-reports wall time and peak memory in the step summary. The ESCO CSV comes
+`.github/workflows/analytics.yml` runs the same command on a GitHub runner
+with the repository's `HF_TOKEN` secret and reports wall time and peak
+memory in the step summary. It runs **daily at 06:00 UTC** (01:00 Colombia,
+after the 04:23 UTC SPE capture) with `--clusters 16 --upload`, and can be
+dispatched manually. After a full uploaded run it calls the Render deploy hook
+(`RENDER_DEPLOY_HOOK_URL` repository secret) so the API restarts and serves
+the new `derived/latest.json`; without the secret it only warns. Once a day on
+purpose: each published run adds ~0.5 GB to the dataset's git history. While
+it holds the `hf-upload` group (~46 min) at most one JobSpy capture waits and
+the one behind it is cancelled by GitHub; the next capture picks those
+postings up. The ESCO CSV comes
 from the GitHub release
 [`taxonomy-esco-v1.2.1`](https://github.com/shalom-A26/SEXTANTE/releases/tag/taxonomy-esco-v1.2.1)
 (unmodified official files with EU attribution, verified by SHA-256); set
@@ -83,6 +91,19 @@ the run is uploaded to `derived/runs/<run_id>/` in the same private dataset;
 The existing capture workflow uploads only `data/spe/`, `data/jobspy/`, and
 the dataset card, so it does not overwrite derived outputs.
 
+Before any stage, the run repairs double-encoded text (`cleaning.repair_frame`)
+and maps department spellings onto the 33 SPE names
+(`cleaning.normalize_departments`: Indeed codes such as `ANT`/`VAC`, LinkedIn
+title case and "Capital District"; a Bogotá city always maps to
+`BOGOTÁ, D.C.`). Source rows on HF are never modified. TF-IDF drops
+schedule/benefit boilerplate and recruiting-marketing template words
+(`features.BOILERPLATE_STOP_WORDS`). Segments are named after their most
+common title only when it covers at least 5% of the segment; otherwise they
+are labeled `Varios: <top terms>`, and repeated names get a distinguishing
+term. The manifest reports `duplicate_postings` and `duplicate_groups`
+(pairs linked transitively; lower bounds because candidate pairs are
+sampled) next to the raw `duplicate_candidates` pair count.
+
 Each run includes:
 
 | Artifact | Contents |
@@ -98,7 +119,7 @@ Each run includes:
 | `sentence_embeddings.npy` | Optional normalized multilingual embeddings |
 | `postings.parquet`, `tfidf_vectorizer.joblib` | Posting metadata row-aligned with the TF-IDF matrix (no description) and the fitted vectorizer, used by the API to score CVs |
 | `clustering_comparison.json`, `segment_projection_tsne.parquet` | Stage 4: K-Means vs Ward hierarchical vs DBSCAN on a 3,000-row SVD-50 sample (silhouette, noise, ARI vs published K-Means) and a t-SNE projection |
-| `supervised_metrics.json`, `salary_estimates.parquet`, `salary_model.joblib` | Stage 5: Ridge regression on log monthly salary and a salary-tertile classifier, K-fold metrics next to naive baselines; per-posting estimates |
+| `supervised_metrics.json`, `salary_estimates.parquet`, `salary_model.joblib` | Stage 5: multinomial logistic classifier over six salary bands aligned with the official SPE bands (no regression: postings publish bands, not exact salaries; band midpoints only place a posting inside its band), stratified K-fold metrics (accuracy, macro-F1, within-one-band) next to a majority baseline; per-posting observed/estimated band |
 | `segment_skills.parquet` | Share and lift of each ESCO skill inside each segment |
 | `skill_graph_nodes.parquet`, `skill_graph_edges.parquet`, `graph_metrics.json` | Stage 6: skill co-occurrence graph (top 400 skills, edges ≥ 2 shared postings), Louvain communities, PageRank, sampled betweenness |
 | `segment_transitions.parquet` | Segment graph (3 nearest neighbours by skill-profile cosine) and all-pairs shortest transition routes |

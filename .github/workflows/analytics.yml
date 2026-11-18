@@ -1,13 +1,19 @@
-name: Analytics run (manual) to Hugging Face
+name: Analytics run (daily) to Hugging Face
 
 # Runs every analytics stage (2-6) on one pinned corpus revision and
-# publishes derived/runs/<id>/ + derived/latest.json. Manual on purpose:
-# measure duration and memory (see the step summary) before scheduling it.
+# publishes derived/runs/<id>/ + derived/latest.json, then redeploys the API
+# on Render so the dashboard serves the new run. Daily at 06:00 UTC (01:00
+# Colombia), after the 04:23 UTC SPE capture; once a day on purpose: every
+# published run adds ~0.5 GB to the dataset's git history, and SPE barely
+# changes within a day. A full run takes ~46 min and ~11-12 GB of the 16 GB
+# runner (see the step summary).
 #
 # ESCO v1.2.1 Spanish skills CSV (not in Git) comes from the GitHub release
 # `taxonomy-esco-v1.2.1` by default, verified by SHA-256; `esco_source: hf`
 # reads it from the HF dataset at `esco_path` instead.
 on:
+  schedule:
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       esco_source:
@@ -23,7 +29,7 @@ on:
         default: ""
       clusters:
         description: "K-Means segments"
-        default: "8"
+        default: "16"
       upload:
         description: "Publish to derived/ on Hugging Face"
         type: boolean
@@ -40,7 +46,11 @@ jobs:
     timeout-minutes: 120
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      ESCO_PATH: ${{ inputs.esco_path }}
+      # Scheduled runs have no inputs: fall back to the dispatch defaults.
+      ESCO_PATH: ${{ inputs.esco_path || 'taxonomy/esco-v1.2.1/skills_es.csv' }}
+      CLUSTERS: ${{ inputs.clusters || '16' }}
+      LIMIT: ${{ inputs.limit }}
+      UPLOAD: ${{ github.event_name == 'schedule' || inputs.upload }}
       ESCO_SHA256: 30b1271fca7348a01ace7f33619ff6fc00fc3bb645a4dbdfa8fae6d57789f4a4
     steps:
       - name: Checkout
@@ -60,7 +70,7 @@ jobs:
           python -m pip install -r requirements-analysis.txt
 
       - name: Download the ESCO taxonomy from the GitHub release
-        if: inputs.esco_source == 'release'
+        if: inputs.esco_source != 'hf'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,10 +92,24 @@ jobs:
 
       - name: Run analytics
         run: |
-          args=(--esco-csv skills_es.csv --clusters "${{ inputs.clusters }}")
-          if [ -n "${{ inputs.limit }}" ]; then args+=(--limit "${{ inputs.limit }}"); fi
-          if [ "${{ inputs.upload }}" = "true" ]; then args+=(--upload); fi
+          args=(--esco-csv skills_es.csv --clusters "$CLUSTERS")
+          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+          if [ "$UPLOAD" = "true" ]; then args+=(--upload); fi
           /usr/bin/time -v -o time.txt python -m sextante_analysis run "${args[@]}"
+
+      # The API loads derived/latest.json at startup: redeploying it on Render
+      # is what puts the new run on the dashboard.
+      - name: Redeploy the API on Render
+        if: success() && env.UPLOAD == 'true' && env.LIMIT == ''
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL is not set; the API keeps serving the previous run until it restarts."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "Render redeploy triggered."
 
       - name: Publish run summary
         if: always()
@@ -124,5 +148,6 @@ jobs:
           path: |
             data/analysis/runs/*/manifest.json
             data/analysis/runs/*/*.json
+            data/analysis/runs/*/*.csv
             time.txt
           retention-days: 30

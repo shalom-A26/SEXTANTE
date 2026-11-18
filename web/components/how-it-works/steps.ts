@@ -1,4 +1,4 @@
-import { cop, type Dashboard } from "@/lib/api";
+import { type Dashboard } from "@/lib/api";
 
 export type Metric = { label: string; value: number; format?: (value: number) => string };
 
@@ -68,8 +68,13 @@ export const STEPS: Step[] = [
       "Los candidatos se confirman con similitud coseno sobre TF-IDF.",
     ],
     algorithm: "J(A,B) ≈ P[minhash(A) = minhash(B)]\ncandidatos = LSH(firmas, bandas)\nduplicado ⇔ cos(tfidf_A, tfidf_B) ≥ umbral",
-    metrics: (d) => d.overview.duplicate_candidates
-      ? [{ label: "pares candidatos", value: d.overview.duplicate_candidates }] : [],
+    metrics: (d) => d.overview.duplicate_postings
+      ? [
+        { label: "vacantes con posible duplicado", value: d.overview.duplicate_postings },
+        { label: "grupos de duplicados", value: d.overview.duplicate_groups ?? 0 },
+      ]
+      : d.overview.duplicate_candidates
+        ? [{ label: "pares candidatos", value: d.overview.duplicate_candidates }] : [],
   },
   {
     key: "tfidf",
@@ -102,24 +107,21 @@ export const STEPS: Step[] = [
   },
   {
     key: "salary",
-    title: "Estimamos salarios",
-    lead: "Con las vacantes que publican salario entrenamos modelos que lo estiman a partir del texto y del contexto.",
+    title: "Estimamos el rango salarial",
+    lead: "Las vacantes no publican un salario exacto sino un rango oficial. Entrenamos un modelo que predice ese rango a partir del texto y del contexto.",
     inside: [
-      "Regresión Ridge sobre el logaritmo del salario, con TF-IDF más ciudad, modalidad, contrato y educación.",
-      "Una regresión logística clasifica la vacante en banda baja, media o alta.",
-      "Todo se evalúa con validación cruzada de 5 particiones contra una línea base ingenua.",
+      "Los salarios se tratan como rangos ordenados (hasta $1,5M, $1,5M–$2M, $2M–$3M…), nunca como cifras inventadas.",
+      "Una regresión logística multiclase predice el rango con TF-IDF más departamento, modalidad, contrato y educación.",
+      "Se evalúa con validación cruzada estratificada contra la línea base de la clase mayoritaria.",
     ],
-    algorithm: "ŷ = exp(w·x + b),  w = argmin ‖Xw − log y‖² + α‖w‖²\nP(banda | x) = softmax(Vx)",
+    algorithm: "P(rango = k | x) = softmax(Wx + b)_k",
     metrics: (d) => {
-      const m = d.salaries.models;
-      return [
-        ...(m.regression ? [
-          { label: "error medio del modelo", value: m.regression.mae_cop, format: cop },
-          { label: "error prediciendo la mediana", value: m.regression.baseline_median_mae_cop, format: cop },
-        ] : []),
-        ...(m.classification && !m.classification.skipped
-          ? [{ label: "acierto en banda", value: m.classification.accuracy, format: percent }] : []),
-      ];
+      const c = d.salaries.models.classification;
+      return c && !c.skipped && c.within_one_band != null ? [
+        { label: "F1 macro del modelo", value: c.macro_f1, format: (v: number) => v.toFixed(2) },
+        { label: "F1 macro clase mayoritaria", value: c.baseline_majority_macro_f1, format: (v: number) => v.toFixed(2) },
+        { label: "acierta el rango o el vecino", value: c.within_one_band, format: percent },
+      ] : [];
     },
   },
   {

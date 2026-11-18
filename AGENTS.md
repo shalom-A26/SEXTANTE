@@ -200,7 +200,8 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `notebooks/01_text_mining_and_segments.ipynb` — course demo (synthetic data
   by default).
 - `.github/workflows/tests.yml` — unittest + ruff on push/PR.
-- `.github/workflows/analytics.yml` — manual full analytics run on a runner
+- `.github/workflows/analytics.yml` — daily (06:00 UTC) + manual full analytics run on a runner,
+  then Render redeploy via `RENDER_DEPLOY_HOOK_URL`
   (ESCO CSV from the `taxonomy-esco-v1.2.1` GitHub release, SHA-256
   verified; shares the `hf-upload` group).
 - `Dockerfile` — API image (HF latest run, or synthetic demo).

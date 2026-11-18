@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from sextante_analysis.supervised import estimate_salary, salary_target
+from sextante_analysis.supervised import band_distribution, estimate_salary, salary_band
 
 from .data import RunData
 
@@ -48,14 +48,38 @@ def clean_title(title: str) -> str:
     return text[:1].upper() + text[1:].lower() if text else ""
 
 
+# A segment is named after its most common title only when that title covers
+# this share of it; below, the segment mixes occupations and says so.
+MIN_NAME_SHARE = 0.05
+
+
 def segment_names(run: RunData) -> dict[int, str]:
-    """Human label per segment: its most frequent cleaned posting title."""
+    """Unique human label per segment.
+
+    The most frequent cleaned title names the segment; mixed segments become
+    "Varios: <top terms>", and repeated names get the first distinctive term
+    that tells them apart (larger segments keep the plain name).
+    """
     if run.segment_names is not None:
         return run.segment_names
-    names = {}
-    for segment, titles in run.postings.groupby("cluster_id")["title"]:
-        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts()
-        names[int(segment)] = str(common.index[0]) if len(common) else f"Segmento {segment}"
+    terms = {int(segment): [t for t in str(value).split(" | ") if t]
+             for segment, value in run.segment_profiles.set_index("cluster_id")["terms"].items()}
+    groups = sorted(run.postings.groupby("cluster_id")["title"], key=lambda item: -len(item[1]))
+    names: dict[int, str] = {}
+    for segment, titles in groups:
+        segment = int(segment)
+        common = titles.map(clean_title).replace("", pd.NA).dropna().value_counts(normalize=True)
+        top_terms = terms.get(segment, [])
+        if len(common) and common.iloc[0] >= MIN_NAME_SHARE:
+            name = str(common.index[0])
+        elif top_terms:
+            name = "Varios: " + ", ".join(top_terms[:3])
+        else:
+            name = f"Segmento {segment}"
+        if name in names.values():
+            extra = next((t for t in top_terms if t.lower() not in name.lower()), str(segment))
+            name = f"{name} · {extra}"
+        names[segment] = name
     run.segment_names = names
     return names
 
@@ -68,19 +92,15 @@ def _segment_top_skills(run: RunData, segment: int, top: int = 6) -> list[dict[s
              "lift": float(r.lift)} for r in rows.itertuples()]
 
 
-def _salary_stats(values: pd.Series) -> dict[str, Any]:
-    values = values.dropna()
-    if values.empty:
-        return {"median": None, "p25": None, "p75": None, "n": 0}
-    return {"median": float(values.median()), "p25": float(values.quantile(0.25)),
-            "p75": float(values.quantile(0.75)), "n": int(values.size)}
+# Departments need this many banded postings before their distribution is shown.
+MIN_DEPARTMENT_SALARIES = 30
 
 
 def dashboard(run: RunData) -> dict[str, Any]:
     if run.precomputed_dashboard is not None:
         return run.precomputed_dashboard
     postings = run.postings.copy()
-    postings["salary"] = salary_target(postings)
+    postings["salary"] = salary_band(postings)
     names = segment_names(run)
     terms = run.segment_profiles.set_index("cluster_id")["terms"].to_dict()
 
@@ -92,7 +112,7 @@ def dashboard(run: RunData) -> dict[str, Any]:
             "name": names.get(segment),
             "postings": int(len(members)),
             "terms": str(terms.get(segment, "")).split(" | ")[:8],
-            "salary": _salary_stats(members["salary"]),
+            "salary": band_distribution(members["salary"]),
             "top_skills": _segment_top_skills(run, segment),
             "modality": _distribution(members["work_modality"], 4),
             "education": _distribution(members["education_level"], 5),
@@ -141,6 +161,8 @@ def dashboard(run: RunData) -> dict[str, Any]:
             "skills_detected": int(len(run.skill_labels)),
             "skill_mentions": run.manifest.get("results", {}).get("skill_mentions"),
             "duplicate_candidates": run.manifest.get("results", {}).get("duplicate_candidates"),
+            "duplicate_postings": run.manifest.get("results", {}).get("duplicate_postings"),
+            "duplicate_groups": run.manifest.get("results", {}).get("duplicate_groups"),
             "sources": _distribution(postings["source"]),
             "cities": _distribution(postings["city"], 10),
             "modality": _distribution(postings["work_modality"], 5),
@@ -156,11 +178,11 @@ def dashboard(run: RunData) -> dict[str, Any]:
         ] if not top_skills.empty else [],
         "education_skills": education_skills,
         "salaries": {
-            "overall": _salary_stats(postings["salary"]),
+            "overall": band_distribution(postings["salary"]),
             "by_department": [
-                {"department": dept, **_salary_stats(group)}
+                {"department": dept, **band_distribution(group)}
                 for dept, group in postings.groupby(postings["department"].fillna("Sin dato"))[
-                    "salary"] if group.notna().sum() >= 3
+                    "salary"] if group.notna().sum() >= MIN_DEPARTMENT_SALARIES
             ],
             "models": run.supervised,
         },
@@ -268,19 +290,19 @@ def match_cv(run: RunData, text: str, limit: int = 20,
         affinities.append((0.5 * relative + 0.5 * coverage, segment, coverage))
     affinities.sort(reverse=True)
     current = affinities[0][1] if affinities else None
-    salaries = None if run.segment_stats else salary_target(postings)
+    bands = None if run.segment_stats else salary_band(postings)
 
     def describe(affinity: float, segment: int, coverage: float) -> dict[str, Any]:
         if run.segment_stats:  # serving bundle: corpus-wide figures
             size = run.segment_stats[segment]["postings"]
-            median = run.segment_stats[segment]["median_salary"]
+            band = run.segment_stats[segment].get("salary_band")
         else:
             members = postings["cluster_id"] == segment
-            size, median = int(members.sum()), _clean(salaries[members].median())
+            size, band = int(members.sum()), band_distribution(bands[members])["mode"]
         return {
             "segment": segment, "name": names.get(segment),
             "affinity": round(100 * affinity, 1), "skill_coverage": round(100 * coverage, 1),
-            "postings": size, "median_salary": median,
+            "postings": size, "salary_band": band,
             "gaps": _gaps(run, segment, have),
         }
 

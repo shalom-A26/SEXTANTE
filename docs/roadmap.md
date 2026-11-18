@@ -10,7 +10,7 @@
 | 2 · Text mining | `sextante_analysis/` | EDA, ESCO exact matching, MinHash duplicate candidates |
 | 3 · Representations | `features.py` | TF-IDF, NMF topics, optional multilingual embeddings |
 | 4 · Segmentation | `features.py`, `comparison.py` | K-Means published; Ward/DBSCAN/t-SNE compared |
-| 5 · Supervised | `supervised.py` | Salary regression + salary-band classifier, CV vs baselines |
+| 5 · Supervised | `supervised.py` | Salary-band classifier (SPE bands), CV vs majority baseline |
 | 6 · Graph | `graph.py` | Skill communities/centrality, segment transition routes |
 | 8 · MVP | `sextante_api/`, `web/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps |
 | Quality | `tests/`, `tests.yml` | 81 tests + ruff in CI; demo run for end-to-end checks |
@@ -36,8 +36,8 @@ check of dashboard and CV flow). **No run on the real corpus yet.**
 
 First published run: `derived/runs/20261101T170836441392Z-cd50c976`
 (corpus revision `cd50c976`, 2026-11-01), `derived/latest.json` points to it.
-Salary regression median absolute error is 9%; 372,660 postings have a
-usable salary. Peak memory (13.0 GB) uses ~80% of the 16 GB runner: the
+372,660 postings have a usable salary band (the 9% regression error once
+reported was measured on band midpoints and was dropped as meaningless). Peak memory (13.0 GB) uses ~80% of the 16 GB runner: the
 corpus grows daily, so reduce memory (stream partitions, drop descriptions
 after vectorizing, cap bigram vocabulary) before scheduling the run. Silhouette on the full
 sparse TF-IDF is ~0.01 (normal for high-dimensional sparse text); segment
@@ -70,8 +70,6 @@ terms at k=16–20, then run with `upload=true`.
 5. **Optional improvements**
    - Grow `synonyms_es.csv` with misses found in manual review.
    - Use sentence embeddings in CV matching when `--embeddings` was run.
-   - Schedule the analytics run (weekly workflow) once (1) shows it fits a
-     GitHub runner's time/memory.
    - Stage 7 (Spark): not needed while a full run fits in memory; revisit
      only if (1) shows otherwise.
    - Word2Vec/UMAP into batch if the course evaluation requires them there.

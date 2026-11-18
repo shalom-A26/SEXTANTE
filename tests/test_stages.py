@@ -11,7 +11,7 @@ import pandas as pd
 
 from sextante_analysis.demo import run_demo, synthetic_corpus
 from sextante_analysis.graph import segment_graph, segment_skill_profiles, transition_routes
-from sextante_analysis.supervised import salary_target
+from sextante_analysis.supervised import BANDS, band_distribution, salary_band
 from sextante_analysis.taxonomy import matcher_from_mentions
 from sextante_analysis.validation import evaluate_reviews, export_review_samples, wilson_interval
 
@@ -47,10 +47,9 @@ class DemoRunTests(unittest.TestCase):
 
     def test_supervised_models_beat_naive_baselines(self):
         supervised = self.manifest["results"]["supervised"]
-        self.assertLess(supervised["regression"]["mae_cop"],
-                        supervised["regression"]["baseline_median_mae_cop"])
-        self.assertGreater(supervised["classification"]["accuracy"],
-                           supervised["classification"]["baseline_majority_accuracy"])
+        self.assertNotIn("regression", supervised)
+        self.assertGreater(supervised["classification"]["macro_f1"],
+                           supervised["classification"]["baseline_majority_macro_f1"])
 
     def test_comparison_reports_three_methods(self):
         methods = self.manifest["results"]["clustering_comparison"]
@@ -75,11 +74,22 @@ class DemoRunTests(unittest.TestCase):
 
 
 class StageUnitTests(unittest.TestCase):
-    def test_salary_target_drops_implausible_values(self):
-        frame = pd.DataFrame({"salary_min": [2e6, 10, None], "salary_max": [4e6, 20, None]})
-        target = salary_target(frame)
-        self.assertEqual(target.iloc[0], 3e6)
-        self.assertTrue(target.iloc[1:].isna().all())
+    def test_salary_band_maps_spe_bands_and_drops_implausible_values(self):
+        frame = pd.DataFrame({
+            "salary_min": [1_500_001, 1_000_001, 15_000_001, 1_500_000, 10, None],
+            "salary_max": [2_000_000, 1_500_000, None, None, 20, None],
+        })
+        bands = salary_band(frame)
+        self.assertEqual([BANDS[b] for b in bands.iloc[:4]],
+                         ["$1,5M – $2M", "Hasta $1,5M", "Más de $6M", "Hasta $1,5M"])
+        self.assertTrue(bands.iloc[4:].isna().all())
+
+    def test_band_distribution_reports_mode_and_shares(self):
+        stats = band_distribution(pd.Series([1, 1, 2, None], dtype="Int64"))
+        self.assertEqual(stats["n"], 3)
+        self.assertEqual(stats["mode"], BANDS[1])
+        self.assertAlmostEqual(sum(b["share"] for b in stats["bands"]), 1.0)
+        self.assertIsNone(band_distribution(pd.Series([], dtype="Int64"))["mode"])
 
     def test_segment_profiles_and_routes(self):
         mentions = pd.DataFrame({
@@ -176,3 +186,50 @@ class StageUnitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DataQualityTests(unittest.TestCase):
+    def test_departments_map_codes_case_and_bogota(self):
+        from sextante_analysis.cleaning import normalize_departments
+
+        frame = pd.DataFrame({
+            "department": ["ANT", "Antioquia", "VAC", "CUN", "Capital District", "Quindío",
+                           "VACANTES PARA TODO EL TERRITORIO", None],
+            "city": ["Medellín", "Envigado", "Cali", "Bogotá", "Bogota", "Armenia", None, None],
+        })
+        changed = normalize_departments(frame)
+        self.assertEqual(frame["department"].iloc[:7].tolist(), [
+            "ANTIOQUIA", "ANTIOQUIA", "VALLE DEL CAUCA", "BOGOTÁ, D.C.", "BOGOTÁ, D.C.",
+            "QUINDIO", "VACANTES PARA TODO EL TERRITORIO"])
+        self.assertTrue(pd.isna(frame["department"].iloc[7]))
+        self.assertEqual(changed, 6)
+
+    def test_duplicate_groups_link_pairs_transitively(self):
+        from sextante_analysis.duplicates import duplicate_groups
+
+        pairs = pd.DataFrame({"source_a": ["spe", "spe", "indeed"],
+                              "vacancy_id_a": ["1", "2", "9"],
+                              "source_b": ["spe", "spe", "indeed"],
+                              "vacancy_id_b": ["2", "3", "8"]})
+        self.assertEqual(duplicate_groups(pairs),
+                         {"duplicate_postings": 5, "duplicate_groups": 2})
+        self.assertEqual(duplicate_groups(pairs.iloc[:0])["duplicate_postings"], 0)
+
+    def test_segment_names_are_unique_and_flag_mixed_segments(self):
+        from types import SimpleNamespace
+
+        from sextante_api.insights import segment_names
+
+        titles = (["Coordinador"] * 10 + ["Coordinador"] * 6 + ["Auxiliar SST"] * 4
+                  + [f"Cargo {i}" for i in range(40)])
+        clusters = [0] * 10 + [1] * 10 + [2] * 40
+        run = SimpleNamespace(
+            segment_names=None,
+            postings=pd.DataFrame({"cluster_id": clusters, "title": titles}),
+            segment_profiles=pd.DataFrame({"cluster_id": [0, 1, 2], "terms": [
+                "gestion | proyectos", "sst | seguridad", "servicio | obra | cliente"]}),
+        )
+        names = segment_names(run)
+        self.assertEqual(names[2], "Varios: servicio, obra, cliente")
+        self.assertEqual(names[0], "Coordinador")
+        self.assertEqual(names[1], "Coordinador · sst")

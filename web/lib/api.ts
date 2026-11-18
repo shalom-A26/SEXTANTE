@@ -1,7 +1,13 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Count = { label: string; count: number };
-export type SalaryStats = { median: number | null; p25: number | null; p75: number | null; n: number };
+// Salaries are official bands (SPE), never exact amounts: see sextante_analysis/supervised.py.
+export type SalaryStats = {
+  n: number;
+  bands: { band: string; count: number; share: number }[];
+  mode: string | null;
+  median: string | null;
+};
 
 export type Segment = {
   id: number;
@@ -24,6 +30,8 @@ export type Dashboard = {
     skills_detected: number;
     skill_mentions: number | null;
     duplicate_candidates: number | null;
+    duplicate_postings?: number | null;
+    duplicate_groups?: number | null;
     sources: Count[];
     cities: Count[];
     modality: Count[];
@@ -39,8 +47,11 @@ export type Dashboard = {
     models: {
       labeled_rows?: number;
       skipped?: string;
-      regression?: { mae_cop: number; baseline_median_mae_cop: number; r2_log: number; median_abs_pct_error: number };
-      classification?: { accuracy: number; macro_f1: number; baseline_majority_accuracy: number; skipped?: string };
+      classification?: {
+        accuracy: number; macro_f1: number; within_one_band: number;
+        baseline_majority_accuracy: number; baseline_majority_macro_f1: number; baseline_within_one_band: number;
+        cv_rows?: number; skipped?: string;
+      };
     };
   };
   graph: {
@@ -62,7 +73,7 @@ export type SegmentAdvice = {
   affinity: number;
   skill_coverage: number;
   postings: number;
-  median_salary: number | null;
+  salary_band: string | null;
   gaps: Gap[];
   route?: { segment: number; name: string }[];
 };
@@ -91,7 +102,7 @@ export type CvResult = {
   matches: Match[];
   niches: SegmentAdvice[];
   pivots: SegmentAdvice[];
-  salary_estimate: { salary_estimate_cop: number; salary_band: string | null } | null;
+  salary_estimate: { salary_band: string; probability: number } | null;
   method: string;
 };
 
@@ -123,3 +134,6 @@ export const cop = (value: number | null | undefined) =>
     : new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
 
 export const pct = (value: number) => `${(100 * value).toFixed(0)}%`;
+
+/** Share of banded postings paying more than $2M COP (bands above "$1,5M – $2M"). */
+export const shareAbove2M = (s: SalaryStats) => s.bands.slice(2).reduce((sum, b) => sum + b.share, 0);
