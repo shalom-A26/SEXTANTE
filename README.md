@@ -37,7 +37,7 @@ access); the GitHub repository is public so the Actions cron runs are free.
 | 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`sextante_analysis/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
 | 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🟡 baseline (TF-IDF + NMF in batch; optional multilingual embeddings; Word2Vec only in the notebook) |
 | 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | ✅ K-Means published; hierarchical/DBSCAN + t-SNE compared in batch (UMAP notebook-only) |
-| 5 · Supervised models | Salary estimation and classification tasks | ✅ Ridge salary regression + salary-band classifier, cross-validated against naive baselines |
+| 5 · Supervised models | Salary estimation and classification tasks | ✅ Salary-band classifier over the official SPE bands (postings publish bands, not exact salaries), cross-validated against a majority baseline |
 | 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | ✅ skill co-occurrence graph (Louvain, PageRank, betweenness) + segment transition routes |
 | 7 · Distributed processing | Apache Spark when the data volume justifies it | ⏸ not needed so far (see roadmap) |
 | **8 · MVP product** | Web application (NextJS + FastAPI) — final course deliverable | ✅ built and tested locally on a demo run; not deployed yet |

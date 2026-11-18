@@ -18,9 +18,11 @@ uvicorn sextante_api.main:app --port 8000
 cd web && cp .env.example .env.local && npm install && npm run dev
 ```
 
-The API picks its run from `SEXTANTE_RUN_DIR`, else the newest run under
-`SEXTANTE_RUNS_ROOT` (default `data/analysis/runs`), else downloads
-`derived/latest.json` from `SEXTANTE_HF_REPO` (needs `HF_TOKEN`).
+The API picks its run from `SEXTANTE_RUN_DIR`, else downloads
+`derived/latest.json` from `SEXTANTE_HF_REPO` (needs `HF_TOKEN`), else the
+newest run under `SEXTANTE_RUNS_ROOT` (default `data/analysis/runs`). Set
+`SEXTANTE_HF_REPO=pxtron/vacantes-colombia` to serve the real run: a local
+`demo` run no longer shadows it.
 `SEXTANTE_CORS_ORIGINS` (comma-separated, default `http://localhost:3000`)
 must list the web origin. The web app reads `NEXT_PUBLIC_API_URL` at build
 time.
@@ -49,7 +51,8 @@ time.
    "niches"; other segments with at least half the best affinity are
    "pivots", shown with their transition route and **skill gaps** (segment
    skills present in ≥ 15% of its postings that the CV lacks).
-6. The salary estimate uses the Stage 5 models on the CV vector.
+6. The salary estimate is the Stage 5 band classifier on the CV vector: it returns
+   a band (e.g. `$1,5M – $2M`) and the model's probability, never an exact amount.
 
 Every match carries the posting `url` so the person can apply at the source.
 
@@ -115,7 +118,7 @@ Each analytics run therefore also writes a **serving bundle**
 for an existing run: `python -m sextante_api.serving <run_dir>`):
 
 - the dashboard payload precomputed over the whole corpus (all figures stay
-  corpus-wide), segment names/sizes/median salaries and centroids;
+  corpus-wide), segment names/sizes/modal salary bands and centroids;
 - every ESCO alias seen, so CV skill detection keeps the full vocabulary;
 - the 40,000 most recently captured postings for CV matching (recent ones
   are the most likely to still accept applications).

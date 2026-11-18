@@ -127,7 +127,7 @@ export function Visual({ stepKey, terms }: { stepKey: string; terms: string[] })
           <path d="M40 20 V260 H380" className="viz-axis" />
           {SALARY_DOTS.map((d, i) => <circle key={i} className="sal-dot" cx={d.x} cy={d.y} r="3.5" />)}
           <line className="reg-line" x1="40" y1="250" x2="370" y2="69" />
-          <text x="46" y="34" className="viz-label">log(salario)</text>
+          <text x="46" y="34" className="viz-label">rango salarial</text>
           <text x="300" y="285" className="viz-label">texto + contexto</text>
         </svg>
       );

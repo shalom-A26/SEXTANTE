@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Meter } from "@/components/charts";
 import { ScanCard } from "@/components/hero-cards";
-import { CountUp, Magnetic, Reveal, SplitHeading } from "@/components/motion";
+import { Magnetic, Reveal, SplitHeading } from "@/components/motion";
 import { gsap, MOTION_OK, ScrollTrigger, useGSAP } from "@/components/motion/gsap";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,9 +151,9 @@ function Results({ result }: { result: CvResult }) {
           )}
           {result.salary_estimate && (
             <div>
-              <span className="muted">Salario estimado para tu perfil</span>
-              <strong><CountUp value={result.salary_estimate.salary_estimate_cop} format={(v) => cop(v)} /></strong>
-              {result.salary_estimate.salary_band && <small>banda {result.salary_estimate.salary_band}</small>}
+              <span className="muted">Rango salarial estimado para tu perfil</span>
+              <strong>{result.salary_estimate.salary_band}</strong>
+              <small>confianza del modelo {pct(result.salary_estimate.probability)}</small>
             </div>
           )}
         </div>
@@ -207,7 +207,7 @@ function Advice({ advice }: { advice: SegmentAdvice }) {
         <Meter value={advice.affinity} label={`Afinidad ${advice.affinity}%`} />
       </header>
       <p className="muted">
-        {advice.postings.toLocaleString("es-CO")} vacantes · salario mediano {cop(advice.median_salary)} · cubres {advice.skill_coverage.toFixed(0)}% de sus habilidades clave
+        {advice.postings.toLocaleString("es-CO")} vacantes · rango salarial más común {advice.salary_band ?? "—"} · cubres {advice.skill_coverage.toFixed(0)}% de sus habilidades clave
       </p>
       {advice.route && advice.route.length > 2 && (
         <p className="route">Ruta: {advice.route.map((r) => r.name).join(" → ")}</p>

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from sextante_analysis.supervised import estimate_salary, salary_target
+from sextante_analysis.supervised import band_distribution, estimate_salary, salary_band
 
 from .data import RunData
 
@@ -68,19 +68,15 @@ def _segment_top_skills(run: RunData, segment: int, top: int = 6) -> list[dict[s
              "lift": float(r.lift)} for r in rows.itertuples()]
 
 
-def _salary_stats(values: pd.Series) -> dict[str, Any]:
-    values = values.dropna()
-    if values.empty:
-        return {"median": None, "p25": None, "p75": None, "n": 0}
-    return {"median": float(values.median()), "p25": float(values.quantile(0.25)),
-            "p75": float(values.quantile(0.75)), "n": int(values.size)}
+# Departments need this many banded postings before their distribution is shown.
+MIN_DEPARTMENT_SALARIES = 30
 
 
 def dashboard(run: RunData) -> dict[str, Any]:
     if run.precomputed_dashboard is not None:
         return run.precomputed_dashboard
     postings = run.postings.copy()
-    postings["salary"] = salary_target(postings)
+    postings["salary"] = salary_band(postings)
     names = segment_names(run)
     terms = run.segment_profiles.set_index("cluster_id")["terms"].to_dict()
 
@@ -92,7 +88,7 @@ def dashboard(run: RunData) -> dict[str, Any]:
             "name": names.get(segment),
             "postings": int(len(members)),
             "terms": str(terms.get(segment, "")).split(" | ")[:8],
-            "salary": _salary_stats(members["salary"]),
+            "salary": band_distribution(members["salary"]),
             "top_skills": _segment_top_skills(run, segment),
             "modality": _distribution(members["work_modality"], 4),
             "education": _distribution(members["education_level"], 5),
@@ -156,11 +152,11 @@ def dashboard(run: RunData) -> dict[str, Any]:
         ] if not top_skills.empty else [],
         "education_skills": education_skills,
         "salaries": {
-            "overall": _salary_stats(postings["salary"]),
+            "overall": band_distribution(postings["salary"]),
             "by_department": [
-                {"department": dept, **_salary_stats(group)}
+                {"department": dept, **band_distribution(group)}
                 for dept, group in postings.groupby(postings["department"].fillna("Sin dato"))[
-                    "salary"] if group.notna().sum() >= 3
+                    "salary"] if group.notna().sum() >= MIN_DEPARTMENT_SALARIES
             ],
             "models": run.supervised,
         },
@@ -268,19 +264,19 @@ def match_cv(run: RunData, text: str, limit: int = 20,
         affinities.append((0.5 * relative + 0.5 * coverage, segment, coverage))
     affinities.sort(reverse=True)
     current = affinities[0][1] if affinities else None
-    salaries = None if run.segment_stats else salary_target(postings)
+    bands = None if run.segment_stats else salary_band(postings)
 
     def describe(affinity: float, segment: int, coverage: float) -> dict[str, Any]:
         if run.segment_stats:  # serving bundle: corpus-wide figures
             size = run.segment_stats[segment]["postings"]
-            median = run.segment_stats[segment]["median_salary"]
+            band = run.segment_stats[segment].get("salary_band")
         else:
             members = postings["cluster_id"] == segment
-            size, median = int(members.sum()), _clean(salaries[members].median())
+            size, band = int(members.sum()), band_distribution(bands[members])["mode"]
         return {
             "segment": segment, "name": names.get(segment),
             "affinity": round(100 * affinity, 1), "skill_coverage": round(100 * coverage, 1),
-            "postings": size, "median_salary": median,
+            "postings": size, "salary_band": band,
             "gaps": _gaps(run, segment, have),
         }
 

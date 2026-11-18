@@ -11,7 +11,7 @@ import pandas as pd
 
 from sextante_analysis.demo import run_demo, synthetic_corpus
 from sextante_analysis.graph import segment_graph, segment_skill_profiles, transition_routes
-from sextante_analysis.supervised import salary_target
+from sextante_analysis.supervised import BANDS, band_distribution, salary_band
 from sextante_analysis.taxonomy import matcher_from_mentions
 from sextante_analysis.validation import evaluate_reviews, export_review_samples, wilson_interval
 
@@ -47,10 +47,9 @@ class DemoRunTests(unittest.TestCase):
 
     def test_supervised_models_beat_naive_baselines(self):
         supervised = self.manifest["results"]["supervised"]
-        self.assertLess(supervised["regression"]["mae_cop"],
-                        supervised["regression"]["baseline_median_mae_cop"])
-        self.assertGreater(supervised["classification"]["accuracy"],
-                           supervised["classification"]["baseline_majority_accuracy"])
+        self.assertNotIn("regression", supervised)
+        self.assertGreater(supervised["classification"]["macro_f1"],
+                           supervised["classification"]["baseline_majority_macro_f1"])
 
     def test_comparison_reports_three_methods(self):
         methods = self.manifest["results"]["clustering_comparison"]
@@ -75,11 +74,22 @@ class DemoRunTests(unittest.TestCase):
 
 
 class StageUnitTests(unittest.TestCase):
-    def test_salary_target_drops_implausible_values(self):
-        frame = pd.DataFrame({"salary_min": [2e6, 10, None], "salary_max": [4e6, 20, None]})
-        target = salary_target(frame)
-        self.assertEqual(target.iloc[0], 3e6)
-        self.assertTrue(target.iloc[1:].isna().all())
+    def test_salary_band_maps_spe_bands_and_drops_implausible_values(self):
+        frame = pd.DataFrame({
+            "salary_min": [1_500_001, 1_000_001, 15_000_001, 1_500_000, 10, None],
+            "salary_max": [2_000_000, 1_500_000, None, None, 20, None],
+        })
+        bands = salary_band(frame)
+        self.assertEqual([BANDS[b] for b in bands.iloc[:4]],
+                         ["$1,5M – $2M", "Hasta $1,5M", "Más de $6M", "Hasta $1,5M"])
+        self.assertTrue(bands.iloc[4:].isna().all())
+
+    def test_band_distribution_reports_mode_and_shares(self):
+        stats = band_distribution(pd.Series([1, 1, 2, None], dtype="Int64"))
+        self.assertEqual(stats["n"], 3)
+        self.assertEqual(stats["mode"], BANDS[1])
+        self.assertAlmostEqual(sum(b["share"] for b in stats["bands"]), 1.0)
+        self.assertIsNone(band_distribution(pd.Series([], dtype="Int64"))["mode"])
 
     def test_segment_profiles_and_routes(self):
         mentions = pd.DataFrame({

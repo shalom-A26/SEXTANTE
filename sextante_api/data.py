@@ -3,10 +3,13 @@
 Resolution order for the run directory:
 
 1. ``SEXTANTE_RUN_DIR`` — an explicit run directory;
-2. the newest run under ``SEXTANTE_RUNS_ROOT`` (default ``data/analysis/runs``);
-3. ``derived/latest.json`` of ``SEXTANTE_HF_REPO`` (needs ``HF_TOKEN``),
+2. ``derived/latest.json`` of ``SEXTANTE_HF_REPO`` (needs ``HF_TOKEN``),
    downloaded into the runs root. With ``SEXTANTE_SERVING=1`` only the run's
-   ``serving/`` bundle is downloaded (see ``serving.py``; fits ~512 MB hosts).
+   ``serving/`` bundle is downloaded (see ``serving.py``; fits ~512 MB hosts);
+3. the newest run under ``SEXTANTE_RUNS_ROOT`` (default ``data/analysis/runs``).
+
+The HF repo wins over local runs so a leftover synthetic ``demo`` run never
+shadows the real published run.
 """
 
 from __future__ import annotations
@@ -81,15 +84,15 @@ def resolve_run_dir() -> Path:
     if explicit:
         return Path(explicit)
     root = Path(os.environ.get("SEXTANTE_RUNS_ROOT", "data/analysis/runs"))
+    repo = os.environ.get("SEXTANTE_HF_REPO")
+    if repo:
+        return _download_latest(repo, root)
     runs = sorted(
         path for path in root.glob("*")
         if path.is_dir() and not path.name.startswith(".") and (path / "manifest.json").is_file()
     ) if root.is_dir() else []
     if runs:
         return runs[-1]
-    repo = os.environ.get("SEXTANTE_HF_REPO")
-    if repo:
-        return _download_latest(repo, root)
     raise FileNotFoundError(
         f"No analytics run found under {root}. Run `python -m sextante_analysis demo` "
         "or set SEXTANTE_RUN_DIR / SEXTANTE_HF_REPO."

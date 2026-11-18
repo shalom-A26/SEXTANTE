@@ -35,7 +35,7 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(body["run"]["synthetic"])
         self.assertTrue(body["segments"])
         self.assertTrue(body["top_skills"])
-        self.assertIn("regression", body["salaries"]["models"])
+        self.assertIn("classification", body["salaries"]["models"])
 
     def test_cv_text_match_returns_links_and_advice(self):
         body = self.client.post("/api/cv/match", data={"text": CV, "limit": "5"}).json()
@@ -45,7 +45,9 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(first["url"].startswith("https://"))
         self.assertTrue(0 <= first["match"] <= 100)
         self.assertTrue(body["niches"])
-        self.assertIsNotNone(body["salary_estimate"])
+        from sextante_analysis.supervised import BANDS
+
+        self.assertIn(body["salary_estimate"]["salary_band"], BANDS)
 
     def test_cv_docx_upload(self):
         from docx import Document
@@ -71,6 +73,27 @@ class ApiTests(unittest.TestCase):
         body = self.client.get(f"/api/segments/{segment}/postings?limit=3").json()
         self.assertEqual(len(body["postings"]), 3)
         self.assertEqual(self.client.get("/api/segments/999/postings").status_code, 404)
+
+
+@unittest.skipIf(TestClient is None, "requires requirements-api.txt")
+class ResolveRunDirTests(unittest.TestCase):
+    def test_hf_repo_wins_over_local_demo_run(self):
+        import os
+        from pathlib import Path
+        from unittest import mock
+
+        from sextante_analysis.demo import run_demo
+        from sextante_api import data
+
+        with tempfile.TemporaryDirectory() as temp:
+            run_demo(temp, rows=120)
+            env = {"SEXTANTE_RUNS_ROOT": temp, "SEXTANTE_HF_REPO": "org/repo"}
+            with mock.patch.dict(os.environ, env), \
+                    mock.patch.object(data, "_download_latest",
+                                      return_value=Path("hf-run")) as download:
+                os.environ.pop("SEXTANTE_RUN_DIR", None)
+                self.assertEqual(data.resolve_run_dir(), Path("hf-run"))
+            download.assert_called_once_with("org/repo", Path(temp))
 
 
 @unittest.skipIf(TestClient is None, "requires requirements-api.txt")

@@ -4,7 +4,7 @@ The full run (481k postings) needs ~2.5 GB of RAM in the API. The bundle
 keeps the corpus-wide numbers but shrinks what CV matching scans:
 
 - ``dashboard.json`` — the dashboard payload computed over the full run;
-- ``segment_stats.json`` — names, sizes and median salaries per segment;
+- ``segment_stats.json`` — names, sizes and modal salary band per segment;
 - ``centroids.npy`` — segment centroids from the full TF-IDF matrix;
 - ``skill_aliases.parquet`` — every ESCO alias seen, so CV skill detection
   keeps the full vocabulary;
@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from sextante_analysis.supervised import salary_target
+from sextante_analysis.supervised import band_distribution, salary_band
 
 from .data import load_run
 from .insights import dashboard, segment_names
@@ -50,12 +50,12 @@ def build_bundle(run_dir: str | Path, rows: int = SERVING_ROWS) -> Path:
     (out / "dashboard.json").write_text(json.dumps(dashboard(run), ensure_ascii=False),
                                         encoding="utf-8")
     names = segment_names(run)
-    salaries = salary_target(run.postings)
+    bands = salary_band(run.postings)
     stats = {
         str(segment): {
             "name": names.get(segment),
             "postings": int((run.postings["cluster_id"] == segment).sum()),
-            "median_salary": _median(salaries[run.postings["cluster_id"] == segment]),
+            "salary_band": band_distribution(bands[run.postings["cluster_id"] == segment])["mode"],
         }
         for segment in run.segment_ids
     }
@@ -90,11 +90,6 @@ def build_bundle(run_dir: str | Path, rows: int = SERVING_ROWS) -> Path:
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
                                        encoding="utf-8")
     return out
-
-
-def _median(values: pd.Series) -> float | None:
-    values = values.dropna()
-    return float(values.median()) if len(values) else None
 
 
 def main() -> None:

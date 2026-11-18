@@ -98,7 +98,7 @@ Each run includes:
 | `sentence_embeddings.npy` | Optional normalized multilingual embeddings |
 | `postings.parquet`, `tfidf_vectorizer.joblib` | Posting metadata row-aligned with the TF-IDF matrix (no description) and the fitted vectorizer, used by the API to score CVs |
 | `clustering_comparison.json`, `segment_projection_tsne.parquet` | Stage 4: K-Means vs Ward hierarchical vs DBSCAN on a 3,000-row SVD-50 sample (silhouette, noise, ARI vs published K-Means) and a t-SNE projection |
-| `supervised_metrics.json`, `salary_estimates.parquet`, `salary_model.joblib` | Stage 5: Ridge regression on log monthly salary and a salary-tertile classifier, K-fold metrics next to naive baselines; per-posting estimates |
+| `supervised_metrics.json`, `salary_estimates.parquet`, `salary_model.joblib` | Stage 5: multinomial logistic classifier over six salary bands aligned with the official SPE bands (no regression: postings publish bands, not exact salaries; band midpoints only place a posting inside its band), stratified K-fold metrics (accuracy, macro-F1, within-one-band) next to a majority baseline; per-posting observed/estimated band |
 | `segment_skills.parquet` | Share and lift of each ESCO skill inside each segment |
 | `skill_graph_nodes.parquet`, `skill_graph_edges.parquet`, `graph_metrics.json` | Stage 6: skill co-occurrence graph (top 400 skills, edges ≥ 2 shared postings), Louvain communities, PageRank, sampled betweenness |
 | `segment_transitions.parquet` | Segment graph (3 nearest neighbours by skill-profile cosine) and all-pairs shortest transition routes |

@@ -130,7 +130,7 @@ def build_run(frame: pd.DataFrame, source: dict[str, Any], config: AnalysisConfi
                 "clustering_comparison": comparison["methods"],
                 "supervised": {
                     key: supervised.get(key)
-                    for key in ("labeled_rows", "regression", "classification", "skipped")
+                    for key in ("labeled_rows", "labels", "classification", "skipped")
                     if key in supervised
                 },
                 "graph": graph_info,

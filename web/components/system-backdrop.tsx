@@ -8,7 +8,7 @@ import { getDashboard } from "@/lib/api";
 // Fixed, faint layer behind every page: what the system reads and computes,
 // drifting by. Decorative only (aria-hidden, no pointer events).
 const PIPELINE = [
-  "TF-IDF 1–2 gramas", "K-Means", "SVD", "MinHash LSH", "Louvain", "PageRank", "Ridge log-salario",
+  "TF-IDF 1–2 gramas", "K-Means", "SVD", "MinHash LSH", "Louvain", "PageRank", "Logística por rango salarial",
   "ESCO v1.2.1", "silueta", "coseno", "NMF", "Dijkstra", "17 columnas", "append-only", "trie de tokens",
 ];
 const FALLBACK_SKILLS = [

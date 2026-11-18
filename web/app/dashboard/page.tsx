@@ -10,7 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { API_URL, cop, getDashboard, pct, type Dashboard } from "@/lib/api";
+import { API_URL, getDashboard, pct, shareAbove2M, type Dashboard } from "@/lib/api";
 
 const TABS = ["Candidatos", "Empleadores", "Programas académicos", "Mapa del mercado"] as const;
 type Tab = (typeof TABS)[number];
@@ -68,8 +68,9 @@ export default function DashboardPage() {
         <Kpi label="Vacantes analizadas" value={o.postings} />
         <Kpi label="Segmentos ocupacionales" value={o.segments} />
         <Kpi label="Habilidades ESCO detectadas" value={o.skills_detected} />
-        <Kpi label="Salario mediano" value={data.salaries.overall.median ?? 0} format={(v) => cop(v)}
-          hint={`${o.with_salary.toLocaleString("es-CO")} vacantes con salario`} />
+        <Kpi label={`Vacantes en ${data.salaries.overall.mode ?? "—"}`}
+          value={data.salaries.overall.bands.find((b) => b.band === data.salaries.overall.mode)?.share ?? 0} format={pct}
+          hint={`rango salarial más común · ${o.with_salary.toLocaleString("es-CO")} vacantes con rango publicado`} />
       </Reveal>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} ref={tabsRef} className="dash-tabs">
@@ -83,13 +84,13 @@ export default function DashboardPage() {
             <Panel title="Habilidades más pedidas" note="% de vacantes que la mencionan">
               <BarList data={data.top_skills.slice(0, 15).map((s) => ({ label: s.skill, value: s.share }))} format={pct} />
             </Panel>
-            <Panel title="Segmentos ocupacionales" note="Salario mediano y habilidades distintivas">
+            <Panel title="Segmentos ocupacionales" note="Rango salarial más común y habilidades distintivas">
               <Accordion type="single" collapsible className="segment-list">
                 {data.segments.map((s) => (
                   <AccordionItem key={s.id} value={String(s.id)}>
                     <AccordionTrigger className="segment-trigger">
                       <strong>{s.name}</strong>
-                      <span>{s.postings.toLocaleString("es-CO")} vacantes · {cop(s.salary.median)}</span>
+                      <span>{s.postings.toLocaleString("es-CO")} vacantes · {s.salary.mode ?? "sin salario publicado"}</span>
                     </AccordionTrigger>
                     <AccordionContent>
                       <p className="chips">
@@ -106,16 +107,26 @@ export default function DashboardPage() {
 
         <TabsContent value="Empleadores">
           <div className="grid-2">
-            <Panel title="Salario por segmento" note="Mediana mensual (COP); pasa el cursor para ver el rango intercuartílico">
+            <Panel title="Distribución salarial" note="% de vacantes por rango oficial del SPE (salario mensual, COP). Las vacantes publican rangos, no cifras exactas.">
+              <BarList data={data.salaries.overall.bands.map((b) => ({ label: b.band, value: b.share, hint: `n=${b.count.toLocaleString("es-CO")}` }))} format={pct} max={1} />
+            </Panel>
+            <Panel title="Salario por segmento" note="% de vacantes que pagan más de $2M; pasa el cursor para ver el rango más común">
               <BarList
-                data={data.segments.filter((s) => s.salary.median).map((s) => ({
-                  label: s.name, value: s.salary.median ?? 0, hint: `P25 ${cop(s.salary.p25)} · P75 ${cop(s.salary.p75)} · n=${s.salary.n}`,
-                }))}
-                format={(v) => cop(v)}
+                data={data.segments.filter((s) => s.salary.n).map((s) => ({
+                  label: s.name, value: shareAbove2M(s.salary), hint: `Rango más común: ${s.salary.mode} · n=${s.salary.n.toLocaleString("es-CO")}`,
+                })).sort((a, b) => b.value - a.value)}
+                format={pct}
+                max={1}
               />
             </Panel>
-            <Panel title="Salario por departamento" note="Departamentos con 3+ vacantes con salario">
-              <BarList data={data.salaries.by_department.map((d) => ({ label: d.department, value: d.median ?? 0, hint: `n=${d.n}` }))} format={(v) => cop(v)} />
+            <Panel title="Salario por departamento" note="% de vacantes que pagan más de $2M (departamentos con 30+ vacantes con rango)">
+              <BarList
+                data={data.salaries.by_department.map((d) => ({
+                  label: d.department, value: shareAbove2M(d), hint: `Rango más común: ${d.mode} · n=${d.n.toLocaleString("es-CO")}`,
+                })).sort((a, b) => b.value - a.value)}
+                format={pct}
+                max={1}
+              />
             </Panel>
             <Panel title="Modalidad de trabajo">
               <BarList data={o.modality.map((c) => ({ label: c.label, value: c.count }))} />
@@ -126,7 +137,7 @@ export default function DashboardPage() {
             <Panel title="Ciudades con más vacantes">
               <BarList data={o.cities.map((c) => ({ label: c.label, value: c.count }))} />
             </Panel>
-            <Panel title="Modelo de estimación salarial" note="Validación cruzada contra una línea base ingenua">
+            <Panel title="Modelo de rango salarial" note="Clasificación del rango a partir del texto; validación cruzada contra la clase mayoritaria">
               <ModelCard models={data.salaries.models} />
             </Panel>
           </div>
@@ -213,19 +224,16 @@ function Panel({ title, note, children }: { title: string; note?: string; childr
 }
 
 function ModelCard({ models }: { models: Dashboard["salaries"]["models"] }) {
-  if (models.skipped || !models.regression) return <p className="muted">{models.skipped ?? "Sin modelo."}</p>;
-  const r = models.regression;
   const c = models.classification;
+  if (models.skipped || !c || c.skipped || c.within_one_band == null) {
+    return <p className="muted">{models.skipped ?? c?.skipped ?? "Sin modelo."}</p>;
+  }
   return (
     <dl className="model">
-      <dt>Error absoluto medio</dt><dd><CountUp value={r.mae_cop} format={(v) => cop(v)} /> <small>vs {cop(r.baseline_median_mae_cop)} prediciendo la mediana</small></dd>
-      <dt>Error porcentual mediano</dt><dd>{pct(r.median_abs_pct_error)}</dd>
-      <dt>R² (log salario)</dt><dd>{r.r2_log.toFixed(2)}</dd>
-      {c && !c.skipped && (<>
-        <dt>Banda salarial (bajo/medio/alto)</dt>
-        <dd>exactitud {pct(c.accuracy)} · F1 {c.macro_f1.toFixed(2)} <small>vs {pct(c.baseline_majority_accuracy)} clase mayoritaria</small></dd>
-      </>)}
-      <dt>Vacantes con salario usable</dt><dd>{models.labeled_rows?.toLocaleString("es-CO")}</dd>
+      <dt>F1 macro</dt><dd><CountUp value={c.macro_f1} format={(v) => v.toFixed(2)} /> <small>vs {c.baseline_majority_macro_f1.toFixed(2)} clase mayoritaria</small></dd>
+      <dt>Exactitud</dt><dd>{pct(c.accuracy)} <small>vs {pct(c.baseline_majority_accuracy)} clase mayoritaria</small></dd>
+      <dt>Acierta el rango o el vecino</dt><dd>{pct(c.within_one_band)} <small>vs {pct(c.baseline_within_one_band)}</small></dd>
+      <dt>Vacantes con rango publicado</dt><dd>{models.labeled_rows?.toLocaleString("es-CO")}</dd>
     </dl>
   );
 }
