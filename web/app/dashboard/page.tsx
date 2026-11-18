@@ -64,6 +64,9 @@ export default function DashboardPage() {
         <div className="notice warn">Datos sintéticos de demostración: ejecuta el análisis sobre el corpus real para ver cifras reales.</div>
       )}
       <SplitHeading as="h1" className="page-title" onScroll={false}>El mercado laboral colombiano, en cifras</SplitHeading>
+      <p className="muted">
+        Datos actualizados al {new Date(data.run.created_at_utc).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })} · se recalculan cada día
+      </p>
       <Reveal className="kpis" stagger={0.1}>
         <Kpi label="Vacantes analizadas" value={o.postings} />
         <Kpi label="Segmentos ocupacionales" value={o.segments} />
