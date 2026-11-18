@@ -148,5 +148,6 @@ jobs:
           path: |
             data/analysis/runs/*/manifest.json
             data/analysis/runs/*/*.json
+            data/analysis/runs/*/*.csv
             time.txt
           retention-days: 30
