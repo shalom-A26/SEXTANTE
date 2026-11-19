@@ -193,7 +193,7 @@ postings. No candidate personal data: only publicly posted job ads.
    requests per capture, the portal's own mechanism, no scraping).
 2. **JobSpy boards** — ethical scraping: identifiable User-Agent, throttling,
    robots.txt honored, no block evasion. Site viability is documented in
-   `docs/source-viability.md` of the source repository.
+   `docs/data.md` (Source viability) of the source repository.
 
 See the source repository (github.com/shalom-A26/SEXTANTE) for the pipeline,
 the architecture diagrams and the viability study.

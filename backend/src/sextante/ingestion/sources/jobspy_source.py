@@ -5,7 +5,7 @@ so every hour returns the freshest top-N of each board, then maps JobSpy's
 DataFrame to the canonical schema.
 
 Site viability for Colombia (probe run 2026-10-05, see
-``docs/source-viability.md``):
+``docs/data.md``, section Source viability):
 
 - **linkedin**  — works; needs ``fetch_description=True`` for full text.
 - **indeed**    — works with ``country_indeed="colombia"`` (403 without it in
@@ -30,7 +30,7 @@ import pandas as pd
 from sextante.core import env
 from sextante.core.schema import normalize
 
-# Sites confirmed working for Colombia (docs/source-viability.md).
+# Sites confirmed working for Colombia (docs/data.md, Source viability).
 ACTIVE_SITES = ["linkedin", "indeed", "bayt"]
 
 # Everything JobSpy exposes, for `sextante.ingestion probe`.

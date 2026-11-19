@@ -1,235 +1,121 @@
-# AGENTS.md — Guide for AI agents working on SEXTANTE
+# AGENTS.md
 
-Academic data-mining project: Colombian job-posting capture pipeline
-(SPE official export + JobSpy boards → canonical schema → Hugging Face).
+Guide for anyone (human or AI agent) changing this repository. Project overview:
+[`README.md`](README.md). How the system works: [`docs/architecture.md`](docs/architecture.md).
+Claude Code also reads [`CLAUDE.md`](CLAUDE.md), which adds stack and library notes and must
+stay consistent with this file.
 
-All code, comments, docs and commit messages are in **English**. The data
-*values* stay in Spanish — they describe Colombian postings.
+## What this is
 
-## Project context
+SEXTANTE, a system that reads Colombian job postings at scale: captures them from the official
+SPE export and job boards, extracts skills (ESCO), segments occupations, estimates salary bands,
+builds a skills graph, and serves a dashboard plus CV matching. Academic project of the
+Universidad Tecnológica de Bolívar (team of 4, roster in the README).
 
-**Full project name**: *SEXTANTE — System for skill extraction, occupational
-segmentation, salary estimation and detection of risk signals in Colombian
-labor demand.* Academic project of the Universidad Tecnológica de Bolívar
-(team of 4; the roster lives in the README's Team section).
+- `backend/`: one Python package, `sextante` (src layout).
+  - `core/`: the shared contract, 17-column schema (`schema.py`), repo paths and `.env` (`env.py`).
+  - `ingestion/`: Stage 1 capture into append-only stores published on Hugging Face.
+  - `analytics/`: Stages 2–6 batch run (cleaning, ESCO, duplicates, TF-IDF, NMF, segments,
+    salary bands, skills graph) written under `derived/` on HF.
+  - `api/`: Stage 8 FastAPI (dashboard aggregates, CV matching), deployed on Render.
+- `frontend/`: Next.js 16 + TypeScript, GSAP, three.js, shadcn/ui; deployed on Vercel.
+  This Next.js version has breaking changes: read the guide in
+  `frontend/node_modules/next/dist/docs/` before writing Next.js code.
+- `data/`: local stores and runs (gitignored, rebuilt from HF). `docs/`: architecture, data,
+  techniques. `notebooks/`: course demo. `.github/workflows/`: capture, analytics, CI.
 
-**Problem**: real job requirements cannot be inferred from the job title
-alone (`"Analista junior"` hides very different functions); the signal lives
-in the free-text description, which has no uniform taxonomy and inconsistent
-vocabulary. SEXTANTE turns Colombian job postings into structured data and,
-down the line, measures demanded skills, salaries, occupational profiles and
-demand risk signals.
+## Commands
 
-**Final deliverable** (course roadmap): a startup-style MVP web app
-(NextJS + FastAPI) with a landing page and a first-class
-**analytics/visualization dashboard** for candidates, employers and academic
-programs — including a **CV-upload flow** that extracts the candidate's
-profile, scores it against the vacancy corpus with a **similarity
-percentage**, shows the jobs the profile actually matches **with links back
-to the live posting so the person can apply**, and recommends role pivots,
-welcomed niches and skill gaps. CV integration and visualizations are core
-requirements, not extras.
-
-**Stage map**:
-
-| Stage | Content | Status |
-|---|---|---|
-| 1 · Data extraction | SPE + JobSpy → canonical schema → HF | ✅ **this repository** |
-| 2 · Text mining | ESCO skill extraction, duplicate detection by textual similarity, EDA | ✅ `backend/src/sextante/analytics/` (validation pending) |
-| 3 · Representations | TF-IDF, Word2Vec, Spanish transformers, topic modeling | 🟡 baseline (TF-IDF/NMF; embeddings optional) |
-| 4 · Segmentation | PCA/t-SNE/UMAP + K-Means/hierarchical/DBSCAN | 🟡 baseline (SVD + K-Means; others notebook-only) |
-| 5 · Supervised models | Salary estimation / classification | ✅ `supervised.py` |
-| 6 · Skills–occupations graph | Communities, centrality, transition routes | ✅ `graph.py` |
-| 7 · Distributed | Apache Spark if volume justifies it | ⏸ not needed so far |
-| 8 · MVP product | Web app + dashboard + CV matching & recommendations | ✅ `backend/src/sextante/api/` + `frontend/` (not deployed) |
-
-**Operating rule for agents**: the repository contains all stages:
-capture (`backend/src/sextante/ingestion/`), batch analytics for Stages 2–6 (`backend/src/sextante/analytics/`),
-the FastAPI backend (`backend/src/sextante/api/`) and the Next.js web app (`frontend/`).
-Analytics reads the published corpus and writes only to `derived/` on HF; it
-never edits or republishes source rows. The API only reads a run and never
-stores uploaded CVs. Open work is tracked in `docs/roadmap.md` — keep it
-current when you finish or discover a task. The
-17-column canonical schema (`backend/src/sextante/core/schema.py`) is the contract all
-future stages consume; treat `data/spe/` + `data/jobspy/` on Hugging Face as
-the corpus those stages will read. When asked for "the project", know that
-the capture pipeline is the foundation, not the whole product.
-
-## Useful commands
+Run everything from the repository root (`data/` and `.env` live there).
 
 ```bash
-# Environment
-.venv/bin/python --version        # Python >= 3.10 (venv created with uv)
-uv pip install -r backend/requirements/base.txt   # capture pipeline (pinned; what CI installs)
-uv pip install --no-deps -e backend               # the `sextante` package (src layout)
-
-# Which JobSpy sites work for Colombia right now?
-.venv/bin/python -m sextante.ingestion probe
-
-# Full cycle (needs HF_TOKEN; see "Secrets")
-.venv/bin/python -m sextante.ingestion pull    --dataset all      # restore corpus from HF
-.venv/bin/python -m sextante.ingestion capture --source jobspy --results 100
-.venv/bin/python -m sextante.ingestion capture --source spe
-.venv/bin/python -m sextante.ingestion emit    --dataset all --upload
-
-# Manual local capture (dev; automation runs in GitHub Actions)
-./scripts/capture.sh [jobspy|spe|all]
-
-# Analytics + MVP
-uv pip install -r backend/requirements/api.txt    # analysis + API stack (then -e backend as above)
-.venv/bin/python -m sextante.analytics demo    # synthetic run, no HF needed
+# backend (Python ≥ 3.10, uv)
+uv venv && uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
+.venv/bin/python -m sextante.ingestion probe|pull|capture|emit   # capture CLI
+.venv/bin/python -m sextante.analytics demo                      # synthetic run, no HF needed
 .venv/bin/python -m sextante.analytics run --esco-csv skills_es.csv [--upload]
-.venv/bin/python -m sextante.analytics review <run_dir>    # manual-review CSVs
-.venv/bin/python -m sextante.analytics evaluate <run_dir>/review
-.venv/bin/uvicorn sextante.api.main:app --port 8000
-(cd frontend && npm install && npm run dev)        # http://localhost:3000
-
-# Tests (analysis/API tests need backend/requirements/api.txt) + lint
-python -m unittest discover -s backend/tests
+.venv/bin/uvicorn sextante.api.main:app --port 8000              # http://127.0.0.1:8000/docs
+.venv/bin/python -m unittest discover -s backend/tests           # no network needed
 ruff check backend
 
+# frontend
+cd frontend
+npm run dev                                                      # http://localhost:3000
+npm run typecheck && npm run build && node scripts/check-guide.ts
 ```
 
-The whole test suite (capture, emission, sync, SPE, JobSpy mapping,
-environment) runs with `python -m unittest discover -s backend/tests`; lint
-with `ruff check backend` (config in `backend/pyproject.toml`).
+## Rules
 
-**Automated capture runs in GitHub Actions**:
-- `.github/workflows/jobspy_capture.yml` — cron `17,47 * * * *` UTC (every
-  30 min; off-peak minutes on purpose, see the workflow comment).
-- `.github/workflows/spe_12h.yml` — cron `23 4,16 * * *` UTC (23:23/11:23
-  Colombia time). The SPE export is a ~415 MB snapshot that barely changes
-  hour to hour.
-Both workflows share the `hf-upload` concurrency group so they never push to
-Hugging Face simultaneously. Both can also be triggered manually with
-`workflow_dispatch`.
-
-## Project rules (critical)
-
-1. **Data contract**: every source must emit the **canonical 17-column
-   schema** of `backend/src/sextante/core/schema.py`, in the exact order. Use `normalize()`
-   before saving and `validate()` to check.
-2. **Data ethics (no exceptions)**:
-   - Never break `robots.txt`. No block evasion, no personal login/cookies,
-     no proxies.
-   - No personal data of candidates.
-   - Identifiable `User-Agent`: `SEXTANTE-UTB-university-research/1.0 (...)`
-     (defined as `pipeline.USER_AGENT`).
-   - Throttling on requests.
-   - SPE is downloaded via the portal's official export mechanism only.
-3. **Dates**: `captured_at` is always stamped `%Y-%m-%d %H:%M:%S`;
-   `published_at` stays exactly as the source gives it (variable format).
-   Stores are append-only, so `captured_at` is the **first** time we saw the
-   vacancy: never overwrite it.
-4. **Append-only stores (`keep="first"`)**: a vacancy already present is
-   **never rewritten**. This is what makes published files immutable.
-   - Dedupe key for `spe`: `vacancy_id` (`CODIGO_VACANTE`; several distinct
-     vacancies can share a provider URL).
-   - Dedupe key for `jobspy`: `url`.
-   - Implemented in `backend/src/sextante/ingestion/store.append()`; returns how many rows are
-     *new*, never the total.
-5. **Cross-source duplicates** are distinguished by the `source` column
-   (`spe`, `linkedin`, `indeed`, `bayt`, ...).
-6. **Persistent memory = Hugging Face** (`pxtron/vacantes-colombia`):
-   - `data/spe/week-*.parquet` — ISO week of `captured_at`.
-   - `data/jobspy/day-*.parquet` — calendar day of `captured_at`.
-   - Before capturing, rebuild the stores with `pipeline pull`; after
-     capturing, republish with `pipeline emit`. The GitHub Actions runner is
-     ephemeral: without the pull there is no accumulation.
-   - Partition by **capture date**, not publication date: archiving by
-     `published_at` would force reopening files that are already published.
-   - `emit._stable()` fixes types and row order: identical content must
-     produce identical bytes, or `upload_folder` re-uploads the file and the
-     savings are lost. If you touch that function, there are tests covering it.
-   - Never delete HF paths that still hold the corpus. The one-off layout
-     migration (2026-10-05) is done; its script lives only in git history.
-7. **Visible failures**: `sextante.ingestion capture` exits with code 1 when a source
-   fails, and `sextante.ingestion emit` writes `estado.json` with the run's counts
-   (including `rows_new`, which is `null` when there was no pull baseline).
-   Do not reintroduce summary branches that only compare against a local
-   total.
-8. **Secrets**: `HF_TOKEN` lives as a repository secret (GitHub) and in a
-   local `.env` (gitignored). Never paste tokens into chat or commit them;
-   rotate the secret when it changes.
-
-## Domain / glossary
-
-- **Vacancy/job offer**: a job posting with a free-text description.
-- **Canonical schema**: the 17 columns documented in the README.
-- **Source/portal**: where a posting is extracted from (`spe`, `linkedin`,
-  `indeed`, `bayt`, ...).
-- **Store**: local append-only parquet per dataset
-  (`data/store/<dataset>.parquet`), rebuildable from HF.
-- **Capture date**: when the pipeline first saw the vacancy; unit of
-  partitioning (`week-*` for SPE, `day-*` for JobSpy).
-- **Emission**: turning stores into the published partition files.
-
-## Architecture
-
-- `backend/src/sextante/core/schema.py` — 17-column contract (+ legacy rename map).
-- `backend/src/sextante/core/env.py` — paths, `.env` loading, stable type coercion.
-- `backend/src/sextante/ingestion/store.py` — append-only stores, dedupe, footer-only row counts.
-- `backend/src/sextante/ingestion/sync.py` — `pull`: rebuild stores from HF, write the published
-  baseline (`data/_published.json`).
-- `backend/src/sextante/ingestion/emit.py` — partition, write `data/spe/` + `data/jobspy/`, static
-  dataset card, upload.
-- `backend/src/sextante/ingestion/sources/spe.py` — official SPE export → canonical schema.
-- `backend/src/sextante/ingestion/sources/jobspy_source.py` — JobSpy general search → canonical
-  schema; holds `ACTIVE_SITES`.
-- `backend/src/sextante/ingestion/__main__.py` — CLI (`probe | pull | capture | emit`).
-- `scripts/capture.sh` — manual local capture.
-- `.github/workflows/jobspy_capture.yml`, `.github/workflows/spe_12h.yml` —
-  automated capture.
-- `backend/src/sextante/analytics/` — offline batch analytics (`python -m sextante.analytics
-  run --esco-csv ...`): revision-pinned corpus load (`corpus.py`), EDA
-  (`eda.py`), ESCO exact matching (`taxonomy.py`), duplicate candidates
-  (`duplicates.py`), TF-IDF/NMF/K-Means/SVD (`features.py`), clustering
-  comparison + t-SNE (`comparison.py`), salary models (`supervised.py`),
-  skills graph and transition routes (`graph.py`), manual validation
-  (`validation.py`), synthetic demo (`demo.py`), orchestration `build_run()`
-  and upload to `derived/runs/<run_id>/` (`run.py`, `artifacts.py`).
-- `backend/src/sextante/api/` — FastAPI: run loading (`data.py`), CV text extraction in
-  memory (`cv.py`), dashboard aggregates and CV matching (`insights.py`),
-  app (`main.py`).
-- `frontend/` — Next.js 16 app: landing, `/dashboard` (candidates, employers,
-  academic programs, market map), `/cv` (upload, matches, niches, pivots).
-- `notebooks/01_text_mining_and_segments.ipynb` — course demo (synthetic data
-  by default).
-- `.github/workflows/tests.yml` — unittest + ruff on push/PR.
-- `.github/workflows/analytics.yml` — daily (06:00 UTC) + manual full analytics run on a runner,
-  then Render redeploy via `RENDER_DEPLOY_HOOK_URL`
-  (ESCO CSV from the `taxonomy-esco-v1.2.1` GitHub release, SHA-256
-  verified; shares the `hf-upload` group).
-- `backend/Dockerfile` — API image, build context `backend/` (HF latest run, or synthetic demo); `render.yaml` points at it.
-- `backend/pyproject.toml` — makes `sextante` installable (`pip install --no-deps -e backend`) and holds the ruff config; pinned dependencies live in `backend/requirements/*.txt`.
-- `backend/tests/` — 93 tests: stores, emission (incl. byte-stable round-trip), SPE
-  source, JobSpy mapping, environment, analytics, stages 4–6, API.
-- `docs/analytics.md` — analytics setup, artifacts, limitations.
-- `docs/mvp.md` — API, CV matching method, web app.
-- `docs/roadmap.md` — done / pending work.
-- `docs/architecture.md` — C4 model, data flow, sequences, design decisions (Mermaid).
-- `docs/data.md` — sources, 17-column schema, medallion layers (bronze/silver/gold), HF and local layouts, invariants.
-- `docs/techniques.md` — every pipeline technique with its real parameters, code and outputs.
-- `docs/source-viability.md` — source study, probe results.
+- **Language**: code, comments, docs and commits in English. UI text is Spanish (Colombian
+  users); data *values* stay in Spanish.
+- **Commits**: small, Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `ci:`...).
+  Work on a branch and open a PR to `main`; CI (`tests.yml`) must pass.
+- **Verify before claiming done**: run the tests and, for behaviour changes, the real thing
+  (capture locally without `--upload`, the demo run + API, the web app). New non-trivial logic
+  gets a test.
+- **Data contract**: every source emits the 17 canonical columns of
+  `backend/src/sextante/core/schema.py`, in order; `normalize()` before saving, `validate()` to
+  check.
+- **Append-only, immutable data**: stores use `keep="first"`; a vacancy already present is never
+  rewritten and `captured_at` (`%Y-%m-%d %H:%M:%S`) is the first time it was seen. Dedupe keys:
+  `vacancy_id` for SPE, `url` for job boards. `published_at` stays as the source gives it.
+  Partition by capture date (SPE `week-*`, JobSpy `day-*`), never by publication date.
+- **Hugging Face is the memory** (`pxtron/vacantes-colombia`, private): `pull` before capture,
+  `emit` after; runners are ephemeral. `emit._stable()` must keep identical content byte-identical
+  (tests cover it). Never delete HF paths that hold the corpus. Analytics reads a pinned revision
+  and writes only under `derived/`; it never edits source rows.
+- **Visible failures**: `capture` exits 1 when a source fails; `emit` writes `estado.json` with
+  `rows_new` (`null` without a pull baseline). Never report growth computed from a local total.
+- **Honest outputs**: salaries are official SPE **bands**, never exact amounts; match % is a
+  ranking heuristic, not a probability; ESCO matches, duplicates and segments are signals until
+  validated. The web guide's six rows are fictional and labelled so; demo runs are flagged
+  `synthetic`.
+- **Data ethics (no exceptions)**: respect `robots.txt`; no block evasion, proxies, logins or
+  cookies; identifiable User-Agent (`sextante.USER_AGENT`); throttle requests; SPE only through
+  its official export; no personal data of candidates; CVs are processed in memory and never
+  stored or logged.
+- **Secrets**: `HF_TOKEN` lives in GitHub secrets, Render and a local `.env` (gitignored).
+  Never commit or paste tokens; never commit `data/`.
+- **Accessibility**: respect `prefers-reduced-motion` (static fallback for the 3D scene), keyboard
+  access, visible focus.
 
 ## Known traps
 
-- `pipeline.store.count_rows()` reads the parquet **footer**; never replace
-  it with `pd.read_parquet` (Arrow #34314 race → exit 134 at teardown; it
-  killed a production capture on 2026-10-05). Covered by tests.
-- `pipeline.sources.spe._VERIFY_SSL` disables TLS verification for the rest
-  of the run after the first `SSLError` (the SPE CA chain is incomplete).
-  Covered by tests; resets every process.
-- Uploads require `HF_TOKEN`; `pipeline emit --upload` without it fails
-  loudly by design.
+- `ingestion/store.count_rows()` reads the Parquet **footer**; never replace it with
+  `pd.read_parquet` (Arrow #34314 race → exit 134 at teardown; it killed a production capture on
+  2026-10-05).
+- `ingestion/sources/spe._VERIFY_SSL` disables TLS verification for the rest of the run after
+  the first `SSLError` (the SPE CA chain is incomplete); resets every process.
+- `core/env.ROOT` is `parents[4]` of `env.py` (the repo root); the Docker image sets
+  `SEXTANTE_ROOT=/app` because the package lives in site-packages there.
+- Capture workflows run every 30 min / 12 h on `main` and share the `hf-upload` concurrency group
+  with analytics; a broken command stops the corpus from growing, so check the first cron run
+  after touching them.
+- Fonts (Boska, Switzer) load from Fontshare's CDN; their licence forbids committing the files.
 
-## Documentation
+## Keeping docs in sync
 
-- `README.md` — what SEXTANTE is, how it works, repository layout, quick start, docs index.
-- `docs/architecture.md` — C4 model, flows, sequences, design decisions (Mermaid).
-- `docs/data.md` — sources, schema, medallion layers, layouts, invariants.
-- `docs/techniques.md` — each pipeline technique with parameters, code and outputs.
-- `docs/source-viability.md` — source viability study.
-- Rule: when architecture or diagrams change, update the docs in the same
-  commit. Docs are English-only (the es/en split was removed in the
-  2026-10-05 refactor).
+Code is not done until the docs describe it. In every PR, check:
+
+| If you change... | Update |
+| --- | --- |
+| An API endpoint, its params or payload | `docs/architecture.md` § API (and `frontend/lib/api.ts` types) |
+| The capture flow, workflows, schedules or concurrency | `docs/architecture.md` § Data flow, sequences, C4 diagrams |
+| The schema, a dedupe key, a partition or the HF / local layout | `docs/data.md` (schema, layouts, invariants) |
+| A source (URL, export, active job boards, probe results) | `docs/data.md` § Source viability and `ACTIVE_SITES` |
+| A file written by an analytics run | `docs/data.md` § Derived artifacts |
+| A constant, threshold, formula or technique (TF-IDF, MinHash, K-Means, bands, graph, matching) | `docs/techniques.md` (and the web guide's `pipeline.ts` if it mirrors it) |
+| How analytics is run (CLI flags, ESCO setup, GitHub Actions) | `docs/architecture.md` § Analytics runs |
+| Deployment, Dockerfile, `render.yaml`, environment variables | `docs/architecture.md` § Hosting / Level 4 and the README quick start |
+| Routes, components or the user journey of the web app | `docs/architecture.md` § Web app |
+| Folders, packages or commands | `README.md` (layout, quick start), this file and `CLAUDE.md` |
+| You find docs that no longer match the code | Fix them in the same PR |
+
+Then add one dated line to the
+[architecture changelog](docs/architecture.md#architecture-changelog) describing the change in
+system terms (not just "updated code").
+
+Diagrams are Mermaid. Before pushing, render the ones you touched, for example with
+`npx -y @mermaid-js/mermaid-cli -i file.mmd -o /tmp/out.svg`, or check the GitHub preview of the
+PR. Avoid reserved words as node ids (`end`, `graph`, `subgraph`). A broken diagram is a broken
+doc.
