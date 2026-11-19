@@ -120,7 +120,7 @@ uv pip install -r backend/requirements/base.txt && uv pip install --no-deps -e b
 ```
 
 Details (ESCO taxonomy, artifacts, GitHub Actions run) in
-[docs/analytics.md](docs/analytics.md).
+[docs/architecture.md](docs/architecture.md#analytics-runs).
 
 ### Tests and lint
 
@@ -154,7 +154,7 @@ The corpus lives in the **private** Hugging Face dataset
 JobSpy Parquet files with English column names and Spanish values. Sources,
 schema, layers and guarantees are documented in [docs/data.md](docs/data.md);
 which boards work for Colombia and why, in
-[docs/source-viability.md](docs/source-viability.md).
+[docs/data.md](docs/data.md#source-viability).
 
 ## Ethics
 
@@ -168,13 +168,9 @@ which boards work for Colombia and why, in
 
 | Document | Read it to understand… |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | how the system is built: C4 model, data flow, sequences, design decisions |
-| [docs/data.md](docs/data.md) | the data: sources, 17-column schema, bronze/silver/gold layers, layouts, invariants |
+| [docs/architecture.md](docs/architecture.md) | how the system is built and run: C4 model, data flow, analytics runs, API, web app, hosting, design decisions |
+| [docs/data.md](docs/data.md) | the data: sources and their viability, 17-column schema, bronze/silver/gold layers, artifacts, invariants |
 | [docs/techniques.md](docs/techniques.md) | every technique of the pipeline, its parameters and outputs |
-| [docs/analytics.md](docs/analytics.md) | how to set up and run the batch analytics and what it writes |
-| [docs/mvp.md](docs/mvp.md) | the API endpoints, the CV-matching method and the web app |
-| [docs/source-viability.md](docs/source-viability.md) | which job boards are viable for Colombia |
-| [docs/roadmap.md](docs/roadmap.md) | what is done and what is left |
 | [AGENTS.md](AGENTS.md) | working rules for AI agents in this repository |
 
 ## Project stages

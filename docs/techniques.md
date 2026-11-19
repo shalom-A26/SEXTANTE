@@ -226,6 +226,12 @@ pivots, each with its Dijkstra route. Gaps are skills asked by at least 15% of
 a segment's postings that the CV does not mention. The salary estimate uses
 the band model.
 
+At runtime no ESCO file is needed: the matcher is rebuilt from the aliases
+seen in the corpus (`matcher_from_mentions`). The match % is a ranking
+heuristic, not a calibrated probability; the salary estimate returns a band
+and the model's probability, never an exact amount. Every match carries the
+posting `url` so the person can apply at the source.
+
 **Parameters.** 20 matches, 3 niches, 3 pivots, gap share ≥ 0.15.
 
 **Output.** The `/api/cv/match` response; nothing is stored.
@@ -240,6 +246,29 @@ labels, until people check them.
 `is_correct` column; reviewers open the URL and fill it.
 `python -m sextante.analytics evaluate <run_dir>/review` reports precision
 with a Wilson 95% interval.
+
+## Limitations
+
+- ESCO extraction is exact phrase/alias matching, extended with a curated
+  Colombian synonym list (`backend/src/sextante/analytics/synonyms_es.csv`: synonym →
+  ESCO preferred label, resolved against the loaded CSV; unknown labels are
+  skipped). Count and hash are recorded in the manifest. On a sample
+  posting it raised detected skills from 4 to 10; extend the list as manual
+  review finds misses.
+- Without the synonyms, ESCO extraction is exact phrase/alias matching. It is transparent and
+  inexpensive, but does not resolve context, abbreviations, or Colombian
+  terminology absent from ESCO.
+- ESCO matches, topics, and clusters are analytical signals, not validated
+  labels. Evaluate them against a manually reviewed sample before product
+  decisions.
+- The first version recomputes one full snapshot in memory. Measure peak
+  memory and duration on the private corpus before adding a schedule or
+  incremental feature store.
+- Word2Vec and UMAP remain notebook-only. Hierarchical clustering, DBSCAN and
+  t-SNE run in batch on a bounded sample for comparison; K-Means stays the
+  published segmentation.
+- Salary models only see postings that publish a salary (mostly SPE); their
+  estimates for other sources are extrapolations.
 
 ## Not in the batch
 

@@ -1,6 +1,6 @@
 # SEXTANTE architecture
 
-> [README](../README.md) · [Data](data.md) · [Techniques](techniques.md) · [Source viability](source-viability.md)
+> [README](../README.md) · [Data](data.md) · [Techniques](techniques.md)
 
 How SEXTANTE is built: C4 model (context, containers, components,
 deployment), the scheduled data flow, the capture sequences and the design
@@ -21,7 +21,12 @@ in docs, editors and GitHub.
 4. [Data layers](#data-layers) (details in [data.md](data.md))
 5. [Sequence: JobSpy capture](#sequence-jobspy-capture)
 6. [Sequence: SPE export](#sequence-spe-export)
-7. [Design decisions](#design-decisions)
+7. [Analytics runs](#analytics-runs)
+8. [API](#api)
+9. [Web app](#web-app)
+10. [Hosting](#hosting)
+11. [Design decisions](#design-decisions)
+12. [Architecture changelog](#architecture-changelog)
 
 ---
 
@@ -34,10 +39,10 @@ schema in `backend/src/sextante/core/schema.py`):
   postings, described step by step below.
 - **Analytics** (`sextante.analytics`): a daily batch run that reads a pinned
   revision of the corpus and publishes derived artifacts under `derived/`
-  (see [analytics.md](analytics.md), [techniques.md](techniques.md)).
+  (see [Analytics runs](#analytics-runs), [techniques.md](techniques.md)).
 - **Product** (`sextante.api` + `frontend/`): a FastAPI service that loads
   the latest run and a Next.js web app with the dashboard and the CV flow
-  (see [mvp.md](mvp.md)).
+  (see [API](#api) and [Web app](#web-app)).
 
 The capture pipeline:
 
@@ -112,7 +117,7 @@ flowchart LR
   scraping).
 - **Job boards**: scraped through JobSpy with ethical criteria
   (identifiable User-Agent, throttling, robots.txt; viability per site in
-  [source-viability.md](source-viability.md)).
+  [data.md](data.md#source-viability)).
 - **Hugging Face Hub**: persistent memory of the pipeline and destination of
   the published dataset.
 
@@ -183,13 +188,13 @@ flowchart LR
 ```
 
 The CV travels only in the request to `/api/cv/match`; nothing is stored.
-Details: [analytics.md](analytics.md), [mvp.md](mvp.md).
+Details: [Analytics runs](#analytics-runs), [API](#api), [Web app](#web-app).
 
 ### Level 3 · Components
 
 Inside the capture side: `sextante.ingestion` plus the shared `sextante.core`.
 The analytics modules are listed in [techniques.md](techniques.md); the API
-modules in [mvp.md](mvp.md).
+modules in [API](#api).
 
 ```mermaid
 flowchart TB
@@ -387,6 +392,273 @@ sequenceDiagram
 
 ---
 
+## Analytics runs
+
+### Setup
+
+Use Python 3.12, as configured in the capture workflows, and install the
+analysis and development stack:
+
+```bash
+.venv/bin/python -m pip install -r backend/requirements/dev.txt
+.venv/bin/python -m pip install --no-deps -e backend
+```
+
+Download the **ESCO v1.2.1 classification** in Spanish and CSV format from
+the [official ESCO download portal](https://esco.ec.europa.eu/en/use-esco/download).
+The CSV should include `conceptUri`, `preferredLabel`, and, when available,
+`altLabels` and `conceptType`. Keep the taxonomy file out of Git and record
+its SHA-256 in every analysis manifest.
+
+Run the complete batch analysis with access to `pxtron/vacantes-colombia`:
+
+```bash
+export HF_TOKEN=...
+python -m sextante.analytics run --esco-csv /path/to/skills_es.csv
+```
+
+The run pins the Hugging Face revision before downloading partitions. Use
+`--limit 3000` for a deterministic demonstration capped at 3,000 rows from
+each dataset, `--upload` to publish
+results, or `--embeddings` to additionally compute multilingual sentence
+embeddings. Embeddings require the optional dependencies:
+
+```bash
+uv pip install -r backend/requirements/embeddings.txt
+```
+
+The embedding model is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+at revision `b8ef00830037f9868450f778081ea683e900fe39`; it is multilingual and
+Apache-2.0 licensed. Embeddings are disabled by default because they add model
+downloads, compute time, and storage. `notebooks/01_text_mining_and_segments.ipynb`
+is the mini demonstration for the course presentation. It includes optional
+small-sample Word2Vec, UMAP, t-SNE, hierarchical, and DBSCAN comparisons.
+It runs on synthetic data by default; set `SEXTANTE_USE_HF=1` to use a
+private-corpus sample. The full dependency set is installed by
+`backend/requirements/dev.txt`.
+
+Execute the complete notebook offline; it uses a generated synthetic sample
+unless `SEXTANTE_USE_HF=1` is set:
+
+```bash
+.venv/bin/jupyter nbconvert --to notebook --execute \
+  --output-dir /tmp/sextante-notebook-run notebooks/01_text_mining_and_segments.ipynb
+```
+
+#### Running on GitHub Actions
+
+`.github/workflows/analytics.yml` runs the same command on a GitHub runner
+with the repository's `HF_TOKEN` secret and reports wall time and peak
+memory in the step summary. It runs **daily at 06:00 UTC** (01:00 Colombia,
+after the 04:23 UTC SPE capture) with `--clusters 16 --upload`, and can be
+dispatched manually. After a full uploaded run it calls the Render deploy hook
+(`RENDER_DEPLOY_HOOK_URL` repository secret) so the API restarts and serves
+the new `derived/latest.json`; without the secret it only warns. Once a day on
+purpose: each published run adds ~0.5 GB to the dataset's git history. While
+it holds the `hf-upload` group (~46 min) at most one JobSpy capture waits and
+the one behind it is cancelled by GitHub; the next capture picks those
+postings up. The ESCO CSV comes
+from the GitHub release
+[`taxonomy-esco-v1.2.1`](https://github.com/shalom-A26/SEXTANTE/releases/tag/taxonomy-esco-v1.2.1)
+(unmodified official files with EU attribution, verified by SHA-256); set
+`esco_source=hf` to read it from the dataset instead.
+
+```bash
+gh workflow run analytics.yml -f limit=3000 -f upload=false   # trial
+gh workflow run analytics.yml                                 # full run + upload
+```
+
+Locally: `gh release download taxonomy-esco-v1.2.1 -p skills_es.csv`.
+
+### Batch behavior
+
+The CLI reads all SPE and JobSpy Parquet partitions from one repository
+revision. It creates `data/analysis/runs/<run_id>/` locally. With `--upload`,
+the run is uploaded to `derived/runs/<run_id>/` in the same private dataset;
+`derived/latest.json` is updated only after the complete run upload succeeds.
+The existing capture workflow uploads only `data/spe/`, `data/jobspy/`, and
+the dataset card, so it does not overwrite derived outputs.
+
+Before any stage, the run repairs double-encoded text (`cleaning.repair_frame`)
+and maps department spellings onto the 33 SPE names
+(`cleaning.normalize_departments`: Indeed codes such as `ANT`/`VAC`, LinkedIn
+title case and "Capital District"; a Bogotá city always maps to
+`BOGOTÁ, D.C.`). Source rows on HF are never modified. TF-IDF drops
+schedule/benefit boilerplate and recruiting-marketing template words
+(`features.BOILERPLATE_STOP_WORDS`). Segments are named after their most
+common title only when it covers at least 5% of the segment; otherwise they
+are labeled `Varios: <top terms>`, and repeated names get a distinguishing
+term. The manifest reports `duplicate_postings` and `duplicate_groups`
+(pairs linked transitively; lower bounds because candidate pairs are
+sampled) next to the raw `duplicate_candidates` pair count.
+
+The files each run writes are listed in
+[data.md](data.md#derived-artifacts-silver-and-gold); what produces each one
+is in [techniques.md](techniques.md).
+
+### Demo run and manual validation
+
+`python -m sextante.analytics demo` generates a synthetic corpus (flagged as
+`synthetic-demo` in the manifest, never uploaded) and runs every stage, so
+the API and web app work in a clean clone.
+
+`python -m sextante.analytics review <run_dir>` writes review CSVs (ESCO
+mentions, duplicate pairs, segment assignments) with an empty `is_correct`
+column; reviewers open the `url` and fill it (`sí`/`no`).
+`python -m sextante.analytics evaluate <run_dir>/review` reports precision
+with a Wilson 95% interval.
+
+---
+
+## API
+
+### Running locally
+
+```bash
+uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
+python -m sextante.analytics demo          # or a real run, or SEXTANTE_HF_REPO
+uvicorn sextante.api.main:app --port 8000
+cd frontend && cp .env.example .env.local && npm install && npm run dev
+```
+
+The API picks its run from `SEXTANTE_RUN_DIR`, else downloads
+`derived/latest.json` from `SEXTANTE_HF_REPO` (needs `HF_TOKEN`), else the
+newest run under `SEXTANTE_RUNS_ROOT` (default `data/analysis/runs`). Set
+`SEXTANTE_HF_REPO=pxtron/vacantes-colombia` to serve the real run: a local
+`demo` run no longer shadows it.
+`SEXTANTE_CORS_ORIGINS` (comma-separated, default `http://localhost:3000`)
+must list the web origin. The web app reads `NEXT_PUBLIC_API_URL` at build
+time.
+
+### Endpoints
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/health` | Run ID and posting count |
+| GET | `/api/dashboard` | Overview KPIs, segments (salary, skills, modality, cities), top skills, skills by education level, salary by department and model metrics, skills graph, segment links, 2D projection, clustering comparison |
+| GET | `/api/segments/{id}/postings` | Sample postings of a segment, with links |
+| POST | `/api/cv/match` | Multipart: `file` (PDF/DOCX/TXT ≤ 5 MB) or `text`; optional `city`, `modality`, `limit` |
+
+The CV-matching method is in
+[techniques.md](techniques.md#11-cv-matching-niches-pivots-and-gaps).
+
+### Docker
+
+```bash
+docker build -t sextante-api backend
+docker run -p 8000:8000 -e SEXTANTE_HF_REPO=pxtron/vacantes-colombia \
+  -e HF_TOKEN=<read-only token> -e SEXTANTE_CORS_ORIGINS=https://<web-domain> sextante-api
+```
+
+Without `SEXTANTE_HF_REPO` the container builds and serves a synthetic demo
+run.
+
+---
+
+## Web app
+
+Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP and three.js, in
+`frontend/`.
+
+
+- **shadcn/ui** (`frontend/components/ui/`, radix-nova style). Its CSS variables are
+  mapped to the dusk palette in `app/globals.css`. The page's own tokens are
+  prefixed `--sx-*` so they don't collide with shadcn's `--muted`,
+  `--accent` and `--radius`. The hand-written CSS stays unlayered so it wins
+  over Tailwind's preflight.
+- **GSAP** (`frontend/components/motion/`). It registers ScrollTrigger,
+  ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
+  `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
+- **Design language** (`frontend/app/design.css`, inspired by emotion-agency.com
+  in SEXTANTE's palette): Boska (display serif) and Switzer (text) from
+  Fontshare's CDN (ITF licence: web use, no redistribution, so no font files
+  in the repo), Fragment Mono for labels. The wordmark (`components/wordmark.tsx`)
+  is "se" + the SEXTANTE logo (`docs/assets/logo.svg`) + "tante". A
+  nautical-chart backdrop (`components/shell/chart-backdrop.tsx`: dusk wash,
+  contours, graticule with Colombian coordinates, compass rose, grain) sits
+  behind every page; surfaces are warm "liquid glass" (blur + gradient
+  hairline + inner highlight) like `GlowButton`, not hard 1px borders.
+- **Intro gate** (`components/landing/intro.tsx`, once per session): logo,
+  tagline, load progress, "Entrar con/sin sonido". The ambient sound
+  (`lib/ambient.ts`) is synthesised with Web Audio (wind + soft pad), so there
+  are no audio files; the header toggle mutes it.
+- **3D world** (`components/world/`). A procedural three.js dusk valley:
+  terrain with vertex colours, a reflecting lake (`Reflector`), standing
+  stones, ~70k instanced grass blades swaying in a shader, drifting petals and
+  a particle swarm that morphs per chapter (sextant → cloud → salary bars →
+  skills graph → CV, `shapes.ts`). Scroll drives the camera along a
+  Catmull-Rom path with a hold on each chapter; the pointer tilts it. It
+  pauses off screen. Reduced motion or no WebGL2: static SVG `DuskField` with
+  the chapters stacked.
+- **Landing** (`components/landing/`). `Chapters` (five compositions over the
+  world, words swap through masks with an RGB glitch), `WhatWeDo` (paragraph
+  lit word by word + the pipeline stages as an active list that jumps to the
+  guide), the guide, `Profiles` (segments as an irregular card grid with a
+  letter-by-letter data overlay) and `Ledger` (corpus figures as an awards
+  table).
+- **"Cómo funciona" guide** (`components/guide/`). Graphic first, little text:
+  a pipeline map (`pipeline-map.tsx`) draws the 12 techniques as a metro line
+  stepping down the medallion lanes (bronze → silver → gold → serving, with
+  the real file paths of each layer) while a dot, one posting, travels to the
+  active station. Each step shows a compact band (layer, title, one-line
+  caption, live corpus figures), an input → technique → output strip for the
+  selected row (`flow.tsx`), the step's chart and six row cards; the full
+  table, row editing, formulas and details sit in collapsible panels. Six
+  example postings (`rows.ts`, fictional and labelled so) are processed live by
+  `pipeline.ts`, a TypeScript mirror of the Python (mojibake repair,
+  normalization, stopwords/templates, ESCO trie longest match, shingles +
+  MinHash(64) + LSH + TF-IDF cosine, TF-IDF, NMF, SVD + K-Means by silhouette,
+  salary bands + softmax regression, co-occurrence graph with
+  Louvain/PageRank/Dijkstra, CV matching). `node frontend/scripts/check-guide.ts`
+  asserts the invariants. See the medallion view in
+  [data.md](data.md#medallion-layers).
+- **One dashboard request.** `getDashboard()` memoizes its promise, so the
+  profiles, ledger, walkthrough and dashboard share a single fetch.
+- **Logo:** `docs/assets/logo.svg`, also used as the favicon
+  (`frontend/app/icon.svg`).
+- **Dashboard and CV.**
+  - KPIs count up and bars grow.
+  - The graph draws its edges.
+  - Tabs have a sliding indicator.
+  - Results cascade in and meters fill up.
+- **Page transitions:** a veil in `app/template.tsx` (opacity only, so fixed layers stay fixed).
+- **Reduced motion:** everything runs inside
+  `gsap.matchMedia("(prefers-reduced-motion: no-preference)")`. With reduced
+  motion the page is static and complete. Mouse parallax runs only with a
+  fine pointer.
+
+---
+
+## Hosting
+
+Free hosting has ~512 MB of RAM; the API over the full run needs ~2.5 GB.
+Each analytics run therefore also writes a **serving bundle**
+(`derived/runs/<run_id>/serving/`, ~32 MB, built by `backend/src/sextante/api/serving.py`;
+for an existing run: `python -m sextante.api.serving <run_dir>`):
+
+- the dashboard payload precomputed over the whole corpus (all figures stay
+  corpus-wide), segment names/sizes/modal salary bands and centroids;
+- every ESCO alias seen, so CV skill detection keeps the full vocabulary;
+- the 40,000 most recently captured postings for CV matching (recent ones
+  are the most likely to still accept applications).
+
+With `SEXTANTE_SERVING=1` the API downloads only that bundle: ~390 MB peak
+RSS, CV match in ~30 ms. Arrow uses the system allocator
+(`ARROW_DEFAULT_MEMORY_POOL=system`, set in `backend/Dockerfile`); its default
+pools keep ~150 MB of freed buffers.
+
+- **API: Render** (free web service, `render.yaml` blueprint): New →
+  Blueprint → this repo; enter `HF_TOKEN` (read access to the dataset) when
+  asked. CORS allows `http://localhost:3000` and any `https://*.vercel.app`
+  (`SEXTANTE_CORS_ORIGINS`, `SEXTANTE_CORS_ORIGIN_REGEX`). The free instance
+  sleeps after 15 min idle; the first request then takes ~1 min.
+- **Web: Vercel**, root directory `frontend/`, env `NEXT_PUBLIC_API_URL` = the
+  Render URL (build-time variable: redeploy after changing it).
+- Hugging Face Docker Spaces were the first choice but now require a PRO
+  subscription.
+
+---
+
 ## Design decisions
 
 | Decision | Alternative rejected | Why |
@@ -400,3 +672,15 @@ sequenceDiagram
 | Static dataset card | Card with live counts | Counts change every run ⇒ bytes change ⇒ re-upload every run. Counts live in `estado.json` instead |
 | Footer-only row counts (`count_rows`) | `pd.read_parquet` | Arrow #34314 race: thread-pooled reader alive at shutdown aborts the process with exit 134 |
 | One 12h SPE workflow | Hourly SPE capture | ~415 MB export per run, slow-changing portal; 2 runs/day is enough and kinder to a state service |
+
+---
+
+## Architecture changelog
+
+One dated line per change, in system terms. Newest first.
+
+- **2026-11-19** — Docs consolidated into `architecture.md`, `data.md` and `techniques.md`; `AGENTS.md` gains the docs-sync table and `CLAUDE.md` the stack notes. The dataset card now points to `docs/data.md` for source viability.
+- **2026-11-19** — Repository split into `backend/` (one `sextante` package: `core`, `ingestion`, `analytics`, `api`) and `frontend/`. CLIs become `python -m sextante.ingestion` / `python -m sextante.analytics`; the API image builds from `backend/Dockerfile`; Vercel's root directory is `frontend`.
+- **2026-11-19** — Web app redesigned: 3D landing, liquid-glass UI and an interactive guide that runs the pipeline techniques in the browser on example rows.
+- **2026-11** — Daily analytics run on GitHub Actions with a Render redeploy hook; the API serves a 32 MB `serving/` bundle to fit 512 MB.
+- **2026-10-05** — Hugging Face layout migrated to `data/spe/week-*` + `data/jobspy/day-*`; El Empleo scraper replaced by JobSpy boards; schema column names moved to English.
