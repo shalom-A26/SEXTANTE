@@ -1,10 +1,13 @@
 # SEXTANTE architecture
 
-> [README](../README.md) · [Source viability](source-viability.md)
+> [README](../README.md) · [Data](data.md) · [Techniques](techniques.md) · [Source viability](source-viability.md)
 
-C4 model of the pipeline (context, containers, components, deployment), main
-data flows, capture sequences and data model. All diagrams are **Mermaid** so
-they render in docs, editors and GitHub.
+How SEXTANTE is built: C4 model (context, containers, components,
+deployment), the scheduled data flow, the capture sequences and the design
+decisions. The data itself (schema, medallion layers, layouts) is in
+[data.md](data.md); what each technique does is in
+[techniques.md](techniques.md). All diagrams are **Mermaid** so they render
+in docs, editors and GitHub.
 
 ## Contents
 
@@ -15,17 +18,28 @@ they render in docs, editors and GitHub.
    - [Level 3 · Components](#level-3--components)
    - [Level 4 · Deployment](#level-4--deployment)
 3. [Data flow and scheduled capture](#data-flow-and-scheduled-capture)
-4. [Medallion view](#medallion-view)
+4. [Data layers](#data-layers) (details in [data.md](data.md))
 5. [Sequence: JobSpy capture](#sequence-jobspy-capture)
 6. [Sequence: SPE export](#sequence-spe-export)
-7. [Data model](#data-model)
-8. [Design decisions](#design-decisions)
+7. [Design decisions](#design-decisions)
 
 ---
 
 ## Summary
 
-SEXTANTE is an ELT pipeline of Colombian job postings:
+SEXTANTE has three parts that share one data contract (the 17-column
+schema in `backend/src/sextante/core/schema.py`):
+
+- **Capture** (`sextante.ingestion`): an ELT pipeline of Colombian job
+  postings, described step by step below.
+- **Analytics** (`sextante.analytics`): a daily batch run that reads a pinned
+  revision of the corpus and publishes derived artifacts under `derived/`
+  (see [analytics.md](analytics.md), [techniques.md](techniques.md)).
+- **Product** (`sextante.api` + `frontend/`): a FastAPI service that loads
+  the latest run and a Next.js web app with the dashboard and the CV flow
+  (see [mvp.md](mvp.md)).
+
+The capture pipeline:
 
 1. **Extract** from two source groups: the official SPE export (massive,
    ~285k rows/capture) and JobSpy job boards (LinkedIn, Indeed, Bayt) with a
@@ -37,7 +51,7 @@ SEXTANTE is an ELT pipeline of Colombian job postings:
    `captured_at` stays fixed at the first observation.
 4. **Persistent memory = Hugging Face**: `python -m sextante.ingestion pull` recomposes the
    local stores from the published partitions before each run;
-   `pipeline emit` publishes them back. The runner is ephemeral, so without
+   `python -m sextante.ingestion emit` publishes them back. The runner is ephemeral, so without
    this step there is no accumulation.
 5. **Capture is automated**: every 30 minutes for JobSpy
    (`.github/workflows/jobspy_capture.yml`, cron `17,47 * * * *` UTC) and
@@ -71,7 +85,8 @@ Who uses the system and which external systems it talks to.
 ```mermaid
 flowchart LR
     u["UTB team<br/>data mining course"]
-    s{{"SEXTANTE<br/>Colombian job-posting<br/>capture pipeline"}}
+    people["Candidates · employers ·<br/>academic programs"]
+    s{{"SEXTANTE<br/>capture · analytics ·<br/>API + web app"}}
     spe["SPE · Public Employment Service<br/>buscadordeempleo.gov.co<br/>API /backbue/v1"]
     boards["Job boards via JobSpy<br/>LinkedIn · Indeed · Bayt"]
     hf["Hugging Face Hub<br/>pxtron/vacantes-colombia"]
@@ -81,6 +96,7 @@ flowchart LR
     s -->|"general search, location=Colombia"| boards
     s -->|"partitions data/spe/*.parquet<br/>data/jobspy/*.parquet (append-only)"| hf
     s -.->|"public job ads only"| u
+    people -->|"dashboard, CV matching"| s
 
     classDef system fill:#1168bd,color:#fff,stroke:#0b4884;
     classDef external fill:#999999,color:#fff,stroke:#6b6b6b;
@@ -90,6 +106,8 @@ flowchart LR
 
 - **UTB team**: configures and runs the workflows (GitHub Actions) and
   queries the dataset (CLI + Hugging Face).
+- **Candidates, employers, academic programs**: use the web app; a CV sent
+  for matching is processed in memory and never stored.
 - **SPE**: state system offering a mass export (official mechanism, no
   scraping).
 - **Job boards**: scraped through JobSpy with ethical criteria
@@ -100,16 +118,17 @@ flowchart LR
 
 ### Level 2 · Containers
 
-Decomposition into executable containers and data stores.
+Decomposition into executable containers and data stores. First the
+capture side, then analytics and the product.
 
 ```mermaid
 flowchart TB
     subgraph RUNNER["GitHub Actions · Ubuntu runner (ephemeral, per run)"]
         wf_h["jobspy_capture.yml<br/>cron 17,47 * * * * UTC"]
         wf_s["spe_12h.yml<br/>cron 23 4,16 * * * UTC"]
-        pull["pipeline pull<br/>restore stores from HF"]
-        cap["pipeline capture<br/>spe | jobspy"]
-        emit["pipeline emit<br/>partition + upload"]
+        pull["sextante.ingestion pull<br/>restore stores from HF"]
+        cap["sextante.ingestion capture<br/>spe | jobspy"]
+        emit["sextante.ingestion emit<br/>partition + upload"]
 
         subgraph EPHEMERAL["data/ on the runner (discarded after the run)"]
             store_local[("data/store/<br/>spe.parquet · jobspy.parquet")]
@@ -119,7 +138,7 @@ flowchart TB
 
     subgraph LOCAL["Local machine (manual development)"]
         sh["scripts/capture.sh"]
-        probe["pipeline probe<br/>site viability check"]
+        probe["sextante.ingestion probe<br/>site viability check"]
         tests["unittest suite"]
     end
 
@@ -145,9 +164,32 @@ flowchart TB
     tests -.-> store_local
 ```
 
+**Analytics and product containers**
+
+```mermaid
+flowchart LR
+    hub["HF Hub<br/>data/spe · data/jobspy"]
+    batch["analytics.yml · daily 06:00 UTC<br/>sextante.analytics run<br/>(pinned corpus revision)"]
+    derived["HF Hub<br/>derived/runs/&lt;id&gt; · latest.json"]
+    api["sextante.api on Render<br/>FastAPI (in-memory serving bundle)"]
+    web["frontend/ on Vercel<br/>Next.js dashboard + CV"]
+    user(("Candidate / employer /<br/>academic program"))
+
+    hub --> batch --> derived --> api
+    batch -.->|"deploy hook"| api
+    web -->|"/api/dashboard, /api/cv/match"| api
+    user --> web
+    web -.->|"apply link (url)"| sourcejob["Original posting"]
+```
+
+The CV travels only in the request to `/api/cv/match`; nothing is stored.
+Details: [analytics.md](analytics.md), [mvp.md](mvp.md).
+
 ### Level 3 · Components
 
-Inside the `pipeline` package.
+Inside the capture side: `sextante.ingestion` plus the shared `sextante.core`.
+The analytics modules are listed in [techniques.md](techniques.md); the API
+modules in [mvp.md](mvp.md).
 
 ```mermaid
 flowchart TB
@@ -197,49 +239,52 @@ flowchart TB
 flowchart LR
     subgraph GH["GitHub"]
         repo["shalom-A26/SEXTANTE<br/>(public)"]
-        actions["Actions runners<br/>30-min + 12h"]
+        actions["Actions runners<br/>capture 30 min + 12 h ·<br/>analytics daily · CI"]
+        secrets["repository secrets<br/>HF_TOKEN · RENDER_DEPLOY_HOOK_URL"]
     end
 
-    subgraph HF["Hugging Face"]
-        ds["dataset pxtron/vacantes-colombia<br/>data/spe/ · data/jobspy/ · README.md"]
-        secret["secret HF_TOKEN<br/>(write scope)"]
+    subgraph HF["Hugging Face (private dataset)"]
+        ds["pxtron/vacantes-colombia<br/>data/spe/ · data/jobspy/ · README.md"]
+        derived["derived/runs/&lt;id&gt; · derived/latest.json"]
+    end
+
+    subgraph RENDER["Render (free instance)"]
+        api["sextante-api<br/>backend/Dockerfile"]
+    end
+
+    subgraph VERCEL["Vercel"]
+        web["sextante-web<br/>root directory frontend/"]
     end
 
     repo --> actions
+    secrets -.->|"read by workflows"| actions
     actions -->|"pull → capture → emit → upload"| ds
-    secret -.->|"read by Actions"| actions
+    actions -->|"analytics run --upload"| derived
+    actions -.->|"deploy hook"| api
+    repo -->|"render.yaml"| api
+    repo -->|"push"| web
+    api -->|"serving bundle (read token)"| derived
+    web -->|"NEXT_PUBLIC_API_URL"| api
 ```
 
-The local machine is optional: it runs the same CLI manually
-(`scripts/capture.sh`) and the test suite. No service is permanently deployed.
+- **Secrets** live in GitHub (`HF_TOKEN` with write scope for the workflows,
+  `RENDER_DEPLOY_HOOK_URL`) and in Render (a read-only `HF_TOKEN`); never in
+  the repository.
+- **API** (Render): the image is built from `backend/Dockerfile` with context
+  `backend/`; at start it downloads only the run's `serving/` bundle so it fits
+  a 512 MB instance.
+- **Web app** (Vercel): Next.js with root directory `frontend/`; it calls the
+  API through `NEXT_PUBLIC_API_URL`.
+- The local machine is optional: it runs the same CLI manually
+  (`scripts/capture.sh`), the demo run and the test suite.
 
 ---
-
-### Analytics and MVP containers
-
-```mermaid
-flowchart LR
-    hub["HF Hub<br/>data/spe · data/jobspy"]
-    batch["sextante.analytics run<br/>(manual, pinned revision)"]
-    derived["HF Hub<br/>derived/runs/&lt;id&gt; · latest.json"]
-    api["sextante.api<br/>FastAPI (in-memory run)"]
-    web["frontend/<br/>Next.js dashboard + CV"]
-    user(("Candidate / employer /<br/>academic program"))
-
-    hub --> batch --> derived --> api
-    web -->|"/api/dashboard, /api/cv/match"| api
-    user --> web
-    web -.->|"apply link (url)"| sourcejob["Original posting"]
-```
-
-The CV travels only in the request to `/api/cv/match`; nothing is stored.
-Details: [analytics.md](analytics.md), [mvp.md](mvp.md).
 
 ## Data flow and scheduled capture
 
 ```mermaid
 flowchart TB
-    start(["cron fires"]) --> pull["pipeline pull<br/>restore store(s) from HF<br/>write data/_published.json baseline"]
+    start(["cron fires"]) --> pull["sextante.ingestion pull<br/>restore store(s) from HF<br/>write data/_published.json baseline"]
     pull --> which{"which workflow?"}
 
     which -->|"30 min"| js["capture --source jobspy<br/>general search per active site<br/>→ append, dedupe by url"]
@@ -253,7 +298,7 @@ flowchart TB
 
     up --> estado["estado.json: rows,<br/>rows_new, latest_capture"]
     estado --> summary["Actions run summary<br/>warns on zero growth"]
-    summary --> end(["done"])
+    summary --> finished(["done"])
 
     classDef warn fill:#d9534f,color:#fff;
     class summary warn;
@@ -261,77 +306,22 @@ flowchart TB
 
 Failure behavior:
 
-- `pipeline capture` exits with code 1 if a source fails (a restored store
+- `sextante.ingestion capture` exits with code 1 if a source fails (a restored store
   would otherwise make the run *look* healthy while the corpus stopped
   growing).
-- `pipeline emit` refuses to run when the store is missing (emitting an
+- `sextante.ingestion emit` refuses to run when the store is missing (emitting an
   empty store would publish an empty dataset).
 - `rows_new` is `null` when there was no pull baseline — growth is never
   invented from the total.
 
 ---
 
-## Medallion view
+## Data layers
 
-SEXTANTE was not designed as a lakehouse, but its layers map cleanly onto the
-medallion pattern (bronze → silver → gold). The web guide ("Cómo funciona")
-draws the twelve techniques on these lanes.
-
-```mermaid
-flowchart LR
-    subgraph L["Landing (ephemeral)"]
-        spe_csv["SPE export CSV ~415 MB"]
-        jobspy_raw["JobSpy results"]
-    end
-    subgraph B["Bronze: raw, immutable"]
-        hf_spe["HF data/spe/week-*.parquet"]
-        hf_jobspy["HF data/jobspy/day-*.parquet"]
-    end
-    subgraph S["Silver: clean, enriched rows"]
-        postings["postings.parquet"]
-        mentions["skill_mentions.parquet"]
-        dups["duplicate_candidates.parquet"]
-        tfidf["tfidf_matrix.npz"]
-    end
-    subgraph G["Gold: ready to consume"]
-        dash["dashboard.json"]
-        models["salary_model.joblib + metrics"]
-        graphs["skill graph + transitions"]
-        serving["serving/ bundle"]
-    end
-    spe_csv -->|"pipeline capture: schema + append"| hf_spe
-    jobspy_raw -->|"pipeline capture: schema + append"| hf_jobspy
-    hf_spe -->|"analytics run: repair, ESCO, TF-IDF"| postings
-    hf_jobspy --> postings
-    postings --> mentions
-    postings --> dups
-    postings --> tfidf
-    tfidf -->|"NMF, K-Means, logistic"| models
-    mentions -->|"co-occurrence, Louvain, PageRank"| graphs
-    postings --> dash
-    models --> serving
-    graphs --> serving
-    dash --> serving
-    serving -->|"derived/latest.json"| api["FastAPI + web"]
-```
-
-| Layer | Where it lives | Code | Guarantee |
-|---|---|---|---|
-| Landing | SPE CSV export, JobSpy responses (never persisted) | `backend/src/sextante/ingestion/sources/` | none: transient |
-| Bronze | HF `data/spe/week-*.parquet`, `data/jobspy/day-*.parquet`; local `data/store/<dataset>.parquet` | `backend/src/sextante/ingestion/` (`schema.py`, `store.py`, `emit.py`, `sync.py`) | append-only (`keep="first"`), partitioned by capture date, byte-stable files, 17-column schema; content kept as captured (mojibake, templates, cross-source duplicates) |
-| Silver | HF `derived/runs/<run_id>/`: `postings.parquet` (repaired text, normalized departments, `cluster_id`), `skill_mentions.parquet`, `skill_aliases.parquet`, `duplicate_candidates.parquet`, `tfidf_matrix.npz` + vectorizer, `segment_projection.parquet` | `backend/src/sextante/analytics/` (`cleaning.py`, `taxonomy.py`, `duplicates.py`, `features.py`) | row-level, cleaned and enriched; built from a revision-pinned corpus (`corpus.py`) |
-| Gold | same run: `dashboard.json`, `segment_stats.json`, `segment_profiles.csv`, `segment_skills.parquet`, `skill_graph_*.parquet`, `segment_transitions.parquet`, `topics.csv`, `supervised_metrics.json`, `salary_model.joblib`, `clustering_comparison.json`, `graph_metrics.json`, `eda.json`; `serving/` bundle; `derived/latest.json` pointer | `backend/src/sextante/analytics/` (`supervised.py`, `graph.py`, `comparison.py`, `run.py`), `backend/src/sextante/api/serving.py` | aggregates and models shaped for the API and the dashboard |
-
-Caveats, so the analogy is not oversold:
-
-- Bronze is not byte-raw: the canonical schema is applied on write
-  (schema-on-write), so source-specific fields are already renamed.
-- Silver and gold are full snapshots recomputed by each daily run, not
-  incremental tables; old runs stay under `derived/runs/` and
-  `derived/latest.json` points at the current one.
-- Lineage is recorded in each run's `manifest.json` (corpus revision and
-  file list); there are no separate data-quality tables, the invariants
-  are enforced by tests.
+The medallion view (landing → bronze → silver → gold), the canonical schema,
+the Hugging Face and local layouts and their invariants live in
+[data.md](data.md). The techniques that move data between layers are in
+[techniques.md](techniques.md).
 
 ---
 
@@ -341,24 +331,24 @@ Caveats, so the analogy is not oversold:
 sequenceDiagram
     participant cron as GitHub Actions
     participant hf as Hugging Face
-    participant p as pipeline
+    participant p as sextante.ingestion
     participant jb as Job boards
 
-    cron->>p: pipeline pull --dataset jobspy
+    cron->>p: pull --dataset jobspy
     p->>hf: list data/jobspy/*.parquet
     hf-->>p: partition files
     p->>hf: download partitions
     hf-->>p: parquet bytes
     p->>p: rebuild data/store/jobspy.parquet<br/>+ write baseline data/_published.json
 
-    cron->>p: pipeline capture --source jobspy
+    cron->>p: capture --source jobspy
     loop each active site (linkedin, indeed, bayt)
         p->>jb: scrape_jobs(site, location=Colombia,<br/>search_term=None, fetch_description=True)
         jb-->>p: jobs DataFrame
     end
     p->>p: map to canonical schema<br/>append, dedupe by url (keep first)
 
-    cron->>p: pipeline emit --dataset jobspy --upload
+    cron->>p: emit --dataset jobspy --upload
     p->>p: partition by captured_at day<br/>_stable(): types + (vacancy_id, url) order
     p->>hf: upload_folder(data/jobspy/*, README.md)<br/>skips unchanged (byte-identical) files
     p->>p: estado.json (rows, rows_new)
@@ -370,15 +360,15 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant cron as GitHub Actions
-    participant p as pipeline
+    participant p as sextante.ingestion
     participant spe as SPE API /backbue/v1
     participant hf as Hugging Face
 
-    cron->>p: pipeline pull --dataset spe
+    cron->>p: pull --dataset spe
     p->>hf: download data/spe/week-*.parquet
     hf-->>p: partitions (rebuild store + baseline)
 
-    cron->>p: pipeline capture --source spe
+    cron->>p: capture --source spe
     p->>spe: POST /vacantes/export/csv/async
     spe-->>p: {jobId} (202)
     loop up to ~5 min
@@ -389,81 +379,11 @@ sequenceDiagram
     spe-->>p: CSV (~415 MB)
     p->>p: map to canonical schema<br/>append, dedupe by vacancy_id
 
-    cron->>p: pipeline emit --dataset spe --upload
+    cron->>p: emit --dataset spe --upload
     p->>p: partition by captured_at ISO week
     p->>hf: upload current week file only
     p-->>cron: exit 0 / 1
 ```
-
----
-
-## Data model
-
-### Canonical schema (17 columns)
-
-| # | Column | Type | Meaning |
-|---|---|---|---|
-| 1 | `vacancy_id` | text | Primary key: `spe-<CODIGO_VACANTE>` / id from the job URL |
-| 2 | `source` | text | Origin: `spe`, `linkedin`, `indeed`, `bayt`, ... |
-| 3 | `url` | text | Posting URL (dedupe key for jobspy) |
-| 4 | `title` | text | Job title |
-| 5 | `company` | text | Employer |
-| 6 | `city` | text | City (parsed from the source location) |
-| 7 | `department` | text | Department, when the source provides it |
-| 8 | `published_at` | text | Publication date as given by the source |
-| 9 | `description` | text | Full description, when available |
-| 10 | `salary_text` | text | Salary as written (band or range) |
-| 11 | `salary_min` | float | Numeric lower bound (COP), when parseable |
-| 12 | `salary_max` | float | Numeric upper bound (COP), when parseable |
-| 13 | `contract_type` | text | Contract type |
-| 14 | `work_modality` | text | `Teletrabajo` / `Remoto`, when flagged |
-| 15 | `education_level` | text | Required education, when provided |
-| 16 | `experience_text` | text | Experience requirement as text |
-| 17 | `captured_at` | text | **First** capture timestamp (`%Y-%m-%d %H:%M:%S`) |
-
-Column names are English (renamed on 2026-10-05 from the original Spanish
-schema); values stay in Spanish. Unavailable fields are null.
-
-### Published layout (Hugging Face)
-
-```
-data/
-├── spe/
-│   ├── week-2026-W38.parquet    # rows first captured in ISO week 38
-│   ├── week-2026-W41.parquet    # current week (the only file that changes)
-│   └── undated.parquet          # rows without a parseable captured_at
-└── jobspy/
-    ├── day-2026-10-04.parquet   # closed day: immutable
-    ├── day-2026-10-05.parquet   # current day (rewritten every capture run)
-    └── undated.parquet
-```
-
-Plus a static `README.md` (dataset card; identical bytes every run, uploaded
-once) and, locally only, `estado.json` (run state, never uploaded).
-
-The batch analytics (`python -m sextante.analytics run --upload`, run
-manually) writes to a separate prefix of the same dataset and never touches
-`data/`:
-
-```
-derived/
-├── runs/<run_id>/     # manifest.json, eda.json, skill_mentions.parquet,
-│                      # duplicate_candidates.parquet, topics, segments, TF-IDF
-└── latest.json        # pointer, updated only after a complete run upload
-```
-
-The capture workflows upload only `data/spe/`, `data/jobspy/` and the card,
-so they cannot overwrite derived outputs. See [analytics.md](analytics.md).
-
-### Invariants
-
-- **Partition by capture date**: each row lives in the file of the week/day
-  it was *first* seen; the row is frozen, so closed files are immutable.
-- **Dedupe keys**: `vacancy_id` (spe) / `url` (jobspy).
-- **Byte stability**: `_stable()` fixes dtypes and orders rows by
-  `(vacancy_id, url)`; same content ⇒ same bytes ⇒ `upload_folder` skips.
-- **Baseline**: `data/_published.json` (written by `pull`) is what lets
-  `estado.json` report genuinely new rows.
 
 ---
 

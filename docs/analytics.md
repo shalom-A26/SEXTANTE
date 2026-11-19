@@ -135,20 +135,10 @@ This approximation can miss pairs and its output requires human review.
 
 ## Stages 5 and 6
 
-**Salary models.** The target is the midpoint of `salary_min`/`salary_max`,
-kept only inside 500,000–60,000,000 COP/month (outside that range values are
-parsing artifacts). Features are the run's TF-IDF plus one-hot `source`,
-`department`, `contract_type`, `work_modality` and `education_level`.
-`Ridge` is fitted on log salary; `LogisticRegression` predicts the salary
-tertile (bajo/medio/alto). Both report K-fold metrics next to a naive
-baseline (median / majority class) — read them together. Fewer than 30
-labeled postings skip the stage with a reason in the manifest.
-
-**Graph.** Skills are linked when they appear in the same posting; Louvain
-(seed 42) finds communities and PageRank/betweenness rank central skills.
-Segments are linked to their three most similar segments by skill profile;
-shortest paths on `1 − similarity` are the transition routes that the CV
-flow shows as "pivots".
+The salary band model (six SPE-aligned bands, multinomial logistic
+regression against a majority baseline) and the skills graph (co-occurrence,
+Louvain, PageRank, transition routes) are described with their parameters in
+[techniques.md](techniques.md#9-salary-band-model).
 
 ## Demo run and manual validation
 

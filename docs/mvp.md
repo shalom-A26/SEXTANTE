@@ -119,7 +119,7 @@ run.
   salary bands + softmax regression, co-occurrence graph with
   Louvain/PageRank/Dijkstra, CV matching). `node frontend/scripts/check-guide.ts`
   asserts the invariants. See the medallion view in
-  [architecture.md](architecture.md#medallion-view).
+  [data.md](data.md#medallion-layers).
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
   profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon

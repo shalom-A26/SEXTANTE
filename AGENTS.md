@@ -88,9 +88,6 @@ uv pip install -r backend/requirements/api.txt    # analysis + API stack (then -
 python -m unittest discover -s backend/tests
 ruff check backend
 
-# One-off: migrate the HF dataset to the data/spe/ + data/jobspy/ layout
-# (already run on 2026-10-05; kept for reference)
-HF_TOKEN=hf_xxx .venv/bin/python scripts/migrate_hf.py --repo pxtron/vacantes-colombia
 ```
 
 The whole test suite (capture, emission, sync, SPE, JobSpy mapping,
@@ -144,11 +141,10 @@ Hugging Face simultaneously. Both can also be triggered manually with
    - `emit._stable()` fixes types and row order: identical content must
      produce identical bytes, or `upload_folder` re-uploads the file and the
      savings are lost. If you touch that function, there are tests covering it.
-   - Never delete HF paths that still hold the corpus; the migration script
-     (`scripts/migrate_hf.py`) is the only place allowed to delete legacy
-     layout files, and only after a verified upload.
-7. **Visible failures**: `pipeline capture` exits with code 1 when a source
-   fails, and `pipeline emit` writes `estado.json` with the run's counts
+   - Never delete HF paths that still hold the corpus. The one-off layout
+     migration (2026-10-05) is done; its script lives only in git history.
+7. **Visible failures**: `sextante.ingestion capture` exits with code 1 when a source
+   fails, and `sextante.ingestion emit` writes `estado.json` with the run's counts
    (including `rows_new`, which is `null` when there was no pull baseline).
    Do not reintroduce summary branches that only compare against a local
    total.
@@ -182,7 +178,6 @@ Hugging Face simultaneously. Both can also be triggered manually with
   schema; holds `ACTIVE_SITES`.
 - `backend/src/sextante/ingestion/__main__.py` — CLI (`probe | pull | capture | emit`).
 - `scripts/capture.sh` — manual local capture.
-- `scripts/migrate_hf.py` — one-off HF layout migration (already run).
 - `.github/workflows/jobspy_capture.yml`, `.github/workflows/spe_12h.yml` —
   automated capture.
 - `backend/src/sextante/analytics/` — offline batch analytics (`python -m sextante.analytics
@@ -212,7 +207,9 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `docs/analytics.md` — analytics setup, artifacts, limitations.
 - `docs/mvp.md` — API, CV matching method, web app.
 - `docs/roadmap.md` — done / pending work.
-- `docs/architecture.md` — C4 model, all diagrams in Mermaid.
+- `docs/architecture.md` — C4 model, data flow, sequences, design decisions (Mermaid).
+- `docs/data.md` — sources, 17-column schema, medallion layers (bronze/silver/gold), HF and local layouts, invariants.
+- `docs/techniques.md` — every pipeline technique with its real parameters, code and outputs.
 - `docs/source-viability.md` — source study, probe results.
 
 ## Known traps
@@ -228,9 +225,10 @@ Hugging Face simultaneously. Both can also be triggered manually with
 
 ## Documentation
 
-- `README.md` — description, usage, active sources, dataset layout.
-- `docs/architecture.md` — C4 model (context, containers, components,
-  deployment), flows, sequences, data model. All diagrams in Mermaid.
+- `README.md` — what SEXTANTE is, how it works, repository layout, quick start, docs index.
+- `docs/architecture.md` — C4 model, flows, sequences, design decisions (Mermaid).
+- `docs/data.md` — sources, schema, medallion layers, layouts, invariants.
+- `docs/techniques.md` — each pipeline technique with parameters, code and outputs.
 - `docs/source-viability.md` — source viability study.
 - Rule: when architecture or diagrams change, update the docs in the same
   commit. Docs are English-only (the es/en split was removed in the
