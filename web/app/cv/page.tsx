@@ -178,7 +178,7 @@ function Results({ result }: { result: CvResult }) {
                   {m.missing_skills.slice(0, 4).map((s) => <Badge key={s} variant="outline" className="chip miss">+ {s}</Badge>)}
                 </span>
               </div>
-              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme ↪</a>
+              <GlowButton href={m.url} external size="sm" className="apply-btn">Postularme</GlowButton>
             </li>
           ))}
         </ul>

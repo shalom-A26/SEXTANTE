@@ -77,13 +77,15 @@ run.
 - **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
   ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
-- **Design language** (`web/app/design.css`, inspired by emotion-agency.com in
-  SEXTANTE's palette): Instrument Serif condensed caps with italic accent words,
-  IBM Plex Mono labels, Hanken Grotesk for UI text. Cream paper (`--bg`) with
-  wine ink (`--fg`) everywhere; `.theme-dark` flips the tokens for anything
-  over the 3D world. `GlowButton` (`components/glow-button.tsx`): glass pill
-  with a spinning conic stroke, rolling label and a glow on hover. Header nav
-  letters flicker on hover; a floating orb links to `/cv`; thin scrollbar.
+- **Design language** (`web/app/design.css`, inspired by emotion-agency.com
+  in SEXTANTE's palette): Boska (display serif) and Switzer (text) from
+  Fontshare's CDN (ITF licence: web use, no redistribution, so no font files
+  in the repo), Fragment Mono for labels. The wordmark (`components/wordmark.tsx`)
+  is "se" + the SEXTANTE logo (`docs/assets/logo.svg`) + "tante". A
+  nautical-chart backdrop (`components/shell/chart-backdrop.tsx`: dusk wash,
+  contours, graticule with Colombian coordinates, compass rose, grain) sits
+  behind every page; surfaces are warm "liquid glass" (blur + gradient
+  hairline + inner highlight) like `GlowButton`, not hard 1px borders.
 - **Intro gate** (`components/landing/intro.tsx`, once per session): logo,
   tagline, load progress, "Entrar con/sin sonido". The ambient sound
   (`lib/ambient.ts`) is synthesised with Web Audio (wind + soft pad), so there
@@ -98,18 +100,24 @@ run.
   the chapters stacked.
 - **Landing** (`components/landing/`). `Chapters` (five compositions over the
   world, words swap through masks with an RGB glitch), `WhatWeDo` (paragraph
-  lit word by word + the nine stages as an active list), "Cómo funciona",
-  `Profiles` (segments as an irregular card grid with generated covers and a
+  lit word by word + the pipeline stages as an active list that jumps to the
+  guide), the guide, `Profiles` (segments as an irregular card grid with a
   letter-by-letter data overlay) and `Ledger` (corpus figures as an awards
-  table; hovering a group dims the rest).
-- **"Cómo funciona"** (`web/components/how-it-works/`). A scroll walkthrough
-  of the nine real stages: capture, cleaning, ESCO skills, duplicates,
-  TF-IDF, segments, salary, graph and CV. `steps.ts` holds each stage's
-  explanation, what happens inside, its algorithm (formula or pseudocode) and
-  live figures read from `/api/dashboard`. `visuals.tsx` holds one animated
-  scene per stage. The scene sits in a sticky frame on wide screens and
-  changes as each step crosses the viewport. On narrow screens, or with
-  reduced motion, each static scene sits above its text.
+  table).
+- **"Cómo funciona" guide** (`components/guide/`). Six example postings
+  (`rows.ts`, fictional and labelled so) go through all 12 stages, computed
+  live in the browser by `pipeline.ts`, a TypeScript mirror of the Python:
+  mojibake repair, normalization, stopwords/template removal, ESCO trie
+  longest match, shingles + MinHash(64) + LSH threshold + TF-IDF cosine,
+  TF-IDF (1–2 grams), NMF, SVD + K-Means with k picked by silhouette, salary
+  bands + a softmax regression trained on the spot, co-occurrence graph with
+  Louvain/PageRank/Dijkstra, and CV matching. The table transforms per step,
+  a row can be selected or edited and the CV rewritten; everything
+  recomputes. `node web/scripts/check-guide.ts` asserts the invariants;
+  normalization, mojibake repair and salary bands were cross-checked against
+  `sextante_analysis` on the example rows. Parameters that differ from the
+  corpus because of the tiny sample (`min_df`, co-occurrence threshold, k) are
+  labelled in the UI.
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
   profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
