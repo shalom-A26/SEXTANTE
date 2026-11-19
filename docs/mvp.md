@@ -104,20 +104,22 @@ run.
   guide), the guide, `Profiles` (segments as an irregular card grid with a
   letter-by-letter data overlay) and `Ledger` (corpus figures as an awards
   table).
-- **"Cómo funciona" guide** (`components/guide/`). Six example postings
-  (`rows.ts`, fictional and labelled so) go through all 12 stages, computed
-  live in the browser by `pipeline.ts`, a TypeScript mirror of the Python:
-  mojibake repair, normalization, stopwords/template removal, ESCO trie
-  longest match, shingles + MinHash(64) + LSH threshold + TF-IDF cosine,
-  TF-IDF (1–2 grams), NMF, SVD + K-Means with k picked by silhouette, salary
-  bands + a softmax regression trained on the spot, co-occurrence graph with
-  Louvain/PageRank/Dijkstra, and CV matching. The table transforms per step,
-  a row can be selected or edited and the CV rewritten; everything
-  recomputes. `node web/scripts/check-guide.ts` asserts the invariants;
-  normalization, mojibake repair and salary bands were cross-checked against
-  `sextante_analysis` on the example rows. Parameters that differ from the
-  corpus because of the tiny sample (`min_df`, co-occurrence threshold, k) are
-  labelled in the UI.
+- **"Cómo funciona" guide** (`components/guide/`). Graphic first, little text:
+  a pipeline map (`pipeline-map.tsx`) draws the 12 techniques as a metro line
+  stepping down the medallion lanes (bronze → silver → gold → serving, with
+  the real file paths of each layer) while a dot, one posting, travels to the
+  active station. Each step shows a compact band (layer, title, one-line
+  caption, live corpus figures), an input → technique → output strip for the
+  selected row (`flow.tsx`), the step's chart and six row cards; the full
+  table, row editing, formulas and details sit in collapsible panels. Six
+  example postings (`rows.ts`, fictional and labelled so) are processed live by
+  `pipeline.ts`, a TypeScript mirror of the Python (mojibake repair,
+  normalization, stopwords/templates, ESCO trie longest match, shingles +
+  MinHash(64) + LSH + TF-IDF cosine, TF-IDF, NMF, SVD + K-Means by silhouette,
+  salary bands + softmax regression, co-occurrence graph with
+  Louvain/PageRank/Dijkstra, CV matching). `node web/scripts/check-guide.ts`
+  asserts the invariants. See the medallion view in
+  [architecture.md](architecture.md#medallion-view).
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
   profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon

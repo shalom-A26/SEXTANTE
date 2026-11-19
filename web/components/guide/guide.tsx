@@ -4,18 +4,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { GlowButton } from "@/components/glow-button";
 import { CountUp } from "@/components/motion";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { gsap, MOTION_OK, useGSAP } from "@/components/motion/gsap";
 import { getDashboard, type Dashboard } from "@/lib/api";
 
 import { analyze, BANDS, cleanTokens, dijkstra, repairMojibake, tokenize, type Analysis } from "./pipeline";
 import { RAW_FIELDS, RECAPTURE, ROWS, SAMPLE_CV, type Row } from "./rows";
-import { STEPS } from "./steps";
+import { Flow } from "./flow";
+import { PipelineMap } from "./pipeline-map";
+import { LAYERS, STEPS, type Layer } from "./steps";
 
 const SEG_COLORS = ["#e0761b", "#2f8f7f", "#c8445a", "#6f55c4", "#b8860b"];
 const CANONICAL = ["vacancy_id", "source", "url", "title", "company", "city", "department", "published_at", "description",
   "salary_text", "salary_min", "salary_max", "contract_type", "work_modality", "education_level", "experience_text", "captured_at"];
 const pad = (n: number, w = 3) => String(n).padStart(w, "0");
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+// What changes when the row crosses into a new layer.
+const ENTER: Record<Layer, string> = {
+  bronze: "la vacante queda guardada tal cual llegó",
+  silver: "aquí el texto deja de ser crudo: se repara, se limpia y se enriquece",
+  gold: "de filas limpias a modelos y agregados listos para consumir",
+  serve: "la API usa el oro para responder a tu CV",
+};
 const key = (r: Row) => (r.source === "spe" ? r.vacancy_id : r.url);
 
 /** Words of the raw text, flagged when the mojibake repair changed them. */
@@ -156,7 +166,6 @@ function Viz({ step, a, sel, rows, cv, setCv }: { step: string; a: Analysis; sel
             const toks = tokenize(r.description).slice(h.start, h.end);
             return <li key={h.start}>{toks.map((t, j) => <code key={j}>{t}</code>)}<span>→</span><b>{h.skill}</b></li>;
           })}</ol>
-          <p className="muted">Coincidencia más larga: en “excel avanzado” el trie no se queda en “excel”.</p>
         </div>
       );
     }
@@ -214,7 +223,7 @@ function Viz({ step, a, sel, rows, cv, setCv }: { step: string; a: Analysis; sel
           <div>
             <p className="label">Silueta según k</p>
             <Bars items={a.sweep.map((s) => [`k = ${s.k}`, Math.max(0, s.silhouette)] as [string, number])} max={1} format={(v) => v.toFixed(2)} />
-            <p className="muted">Gana k = {new Set(a.clusters.labels).size} (silueta {a.clusters.silhouette.toFixed(2)}).</p>
+            <p className="label">gana k = {new Set(a.clusters.labels).size}</p>
           </div>
         </div>
       );
@@ -225,7 +234,6 @@ function Viz({ step, a, sel, rows, cv, setCv }: { step: string; a: Analysis; sel
         <div>
           <p className="label">P(banda | fila {sel + 1}) · softmax entrenada con {a.bands.filter((b) => b != null).length} filas</p>
           <Bars items={a.logistic.classes.map((c, k) => [BANDS[c], probs[k]])} max={1} />
-          <p className="muted">Con una fila por banda no hay clase mayoritaria; en el corpus real, el modelo se compara contra ella (cifras abajo).</p>
         </div>
       );
     }
@@ -314,77 +322,90 @@ export function Guide() {
   useGSAP(() => {
     gsap.matchMedia().add(MOTION_OK, () => {
       const q = gsap.utils.selector(ref);
-      gsap.fromTo(q(".gd-explain > *"), { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.05, ease: "expo.out" });
-      gsap.fromTo(q(".gd-cell"), { autoAlpha: 0, x: -10 }, { autoAlpha: 1, x: 0, duration: 0.6, stagger: 0.05, ease: "expo.out" });
-      gsap.fromTo(q(".gd-viz > *"), { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.7, ease: "expo.out" });
+      gsap.fromTo(q(".gd-band > *"), { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.6, stagger: 0.05, ease: "expo.out" });
+      // The output card slides in from the technique, like data moving through it.
+      gsap.fromTo(q(".gd-flow > *"), { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.7, stagger: 0.12, ease: "expo.out" });
+      gsap.fromTo(q(".gd-viz > *, .gd-mini b"), { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.6, stagger: 0.03, ease: "expo.out" });
     });
   }, { scope: ref, dependencies: [step] });
 
   const move = (d: number) => setStep((v) => Math.max(0, Math.min(STEPS.length - 1, v + d)));
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowRight") { e.preventDefault(); move(1); }
-    if (e.key === "ArrowLeft") { e.preventDefault(); move(-1); }
-  };
+  const layer = LAYERS[s.layer];
+  const enters = step > 0 && STEPS[step - 1].layer !== s.layer ? LAYERS[STEPS[step - 1].layer] : null;
 
   return (
     <section className="guide" id="como-funciona" ref={ref}>
       <header className="gd-head">
         <span className="pill">Cómo funciona</span>
-        <h2 className="display">Paso <i>a</i> paso, fila <i>por</i> fila</h2>
-        <p className="lead">
-          Seis vacantes de ejemplo recorren todo el sistema. Los cálculos son reales y corren en tu navegador con las mismas técnicas del
-          pipeline; las filas fueron escritas para esta guía, no son vacantes reales.
-        </p>
+        <h2 className="display">El pipeline <i>en</i> capas</h2>
+        <p className="lead">Seis vacantes de ejemplo (escritas para esta guía) atraviesan las tres capas del sistema. Cada cálculo es real y corre en tu navegador.</p>
+        <div className="gd-legend">
+          {(["bronze", "silver", "gold"] as const).map((id) => (
+            <Tooltip key={id}>
+              <TooltipTrigger asChild>
+                <button type="button" className="gd-layer" style={{ "--lc": LAYERS[id].color } as React.CSSProperties}>
+                  <i />{LAYERS[id].name} <span className="mono">{LAYERS[id].tag}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="mono gd-tip">{LAYERS[id].files}</TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
       </header>
 
-      <div className="gd-stepper glass-pill" role="tablist" aria-label="Etapas del pipeline" onKeyDown={onKey}>
-        {STEPS.map((st, i) => (
-          <button key={st.key} role="tab" aria-selected={i === step} tabIndex={i === step ? 0 : -1}
-            className={i === step ? "on" : i < step ? "done" : ""} onClick={() => setStep(i)}>
-            <span className="mono">({pad(i + 1)})</span><span className="gd-step-name">{st.title}</span>
-          </button>
-        ))}
-        <i className="gd-progress" style={{ transform: `scaleX(${(step + 1) / STEPS.length})` }} aria-hidden="true" />
+      <PipelineMap step={step} onStep={setStep} />
+
+      <div className="gd-band" style={{ "--lc": layer.color } as React.CSSProperties} aria-live="polite">
+        <span className="gd-layer static"><i />{layer.name}</span>
+        <span className="mono gd-count">{pad(step + 1, 2)} / {STEPS.length}</span>
+        <h3>{s.title}</h3>
+        <p>{s.caption}</p>
+        {enters && <p className="gd-enter mono">{enters.name} → {layer.name}: {ENTER[s.layer]}</p>}
+        {metrics.length > 0 && (
+          <dl className="gd-metrics">
+            {metrics.map((m) => <div key={m.label}><dd><CountUp value={m.value} format={m.format} /></dd><dt>{m.label}{data?.run.synthetic ? " · demo" : ""}</dt></div>)}
+          </dl>
+        )}
+        <div className="gd-nav">
+          <GlowButton size="sm" onClick={() => move(-1)} disabled={step === 0}>Anterior</GlowButton>
+          <GlowButton size="sm" solid onClick={() => move(1)} disabled={step === STEPS.length - 1}>Siguiente</GlowButton>
+        </div>
       </div>
 
-      <div className="gd-body">
-        <article className="gd-explain g-card" aria-live="polite">
-          <p className="label">Etapa {pad(step + 1, 2)} de {STEPS.length}</p>
-          <h3>{s.title}</h3>
-          <p className="gd-lead">{s.lead}</p>
-          <ul>{s.inside.map((line) => <li key={line}>{line}</li>)}</ul>
-          <pre className="gd-formula"><code>{s.formula}</code></pre>
-          <p className="label gd-params">{s.params}</p>
-          {metrics.length > 0 && (
-            <dl className="gd-metrics">
-              <p className="label">En el corpus real{data?.run.synthetic ? " (demo)" : ""}</p>
-              {metrics.map((m) => <div key={m.label}><dd><CountUp value={m.value} format={m.format} /></dd><dt>{m.label}</dt></div>)}
-            </dl>
-          )}
-          <div className="gd-nav">
-            <GlowButton size="sm" onClick={() => move(-1)} disabled={step === 0}>Anterior</GlowButton>
-            <GlowButton size="sm" solid onClick={() => move(1)} disabled={step === STEPS.length - 1}>Siguiente</GlowButton>
-          </div>
-        </article>
+      <Flow step={s} a={a} rows={rows} sel={sel} cv={cv} />
 
-        <div className="gd-right">
-          <div className="gd-table g-card">
-            <div className="gd-table-head">
-              <p className="label">Dataset de ejemplo · haz clic en una fila</p>
-              <button type="button" className="u-link mono" onClick={() => setEditing((v) => !v)}>
-                {editing ? "Listo" : `Editar fila ${sel + 1}`}
+      <div className="gd-stage">
+        <div className="gd-viz g-card"><Viz step={s.key} a={a} sel={sel} rows={rows} cv={cv} setCv={setCv} /></div>
+        <ol className="gd-minis" aria-label="Filas de ejemplo">
+          {rows.map((row, i) => (
+            <li key={row.vacancy_id}>
+              <button type="button" className={`gd-mini g-card${i === sel ? " sel" : ""}`} onClick={() => setSel(i)} aria-pressed={i === sel}>
+                <span className="mono">Fila {i + 1} · {row.source}</span>
+                <strong>{step >= 2 ? a.repaired[i].title : row.title}</strong>
+                <b><StepCell step={s.key} a={a} i={i} /></b>
               </button>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="gd-more">
+        <details className="g-card">
+          <summary className="mono">Ver las 6 filas completas · editar</summary>
+          <div className="gd-table">
+            <div className="gd-table-head">
+              <p className="label">Haz clic en una fila para seguirla</p>
+              <button type="button" className="u-link mono" onClick={() => setEditing((v) => !v)}>{editing ? "Listo" : `Editar fila ${sel + 1}`}</button>
             </div>
             {editing && (
               <textarea className="gd-edit" value={rows[sel].description} rows={4} aria-label={`Descripción de la fila ${sel + 1}`}
                 onChange={(e) => setRows((rs) => rs.map((r, i) => (i === sel ? { ...r, description: e.target.value } : r)))} />
             )}
             <table>
-              <thead><tr><th>#</th><th>Vacante</th>{early && <th>Descripción</th>}<th>{s.title}</th></tr></thead>
+              <thead><tr><th>#</th><th>Vacante</th>{early && <th>Descripción</th>}<th>{s.short}</th></tr></thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={row.vacancy_id} className={i === sel ? "sel" : ""} onClick={() => setSel(i)} tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === "Enter") setSel(i); }} aria-selected={i === sel}>
+                  <tr key={row.vacancy_id} className={i === sel ? "sel" : ""} onClick={() => setSel(i)}>
                     <td className="mono">{i + 1}</td>
                     <td><strong>{step >= 2 ? a.repaired[i].title : row.title}</strong><small className="mono">{row.source} · {row.city}</small></td>
                     {early && (
@@ -404,8 +425,14 @@ export function Guide() {
               </tbody>
             </table>
           </div>
-          <div className="gd-viz g-card"><Viz step={s.key} a={a} sel={sel} rows={rows} cv={cv} setCv={setCv} /></div>
-        </div>
+        </details>
+        <details className="g-card">
+          <summary className="mono">Más detalle de “{s.short}” · fórmula</summary>
+          <p className="gd-lead">{s.lead}</p>
+          <ul>{s.inside.map((line) => <li key={line}>{line}</li>)}</ul>
+          <pre className="gd-formula"><code>{s.formula}</code></pre>
+          <p className="label gd-params">{s.params}</p>
+        </details>
       </div>
     </section>
   );

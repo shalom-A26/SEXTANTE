@@ -2,8 +2,21 @@ import { type Dashboard } from "@/lib/api";
 
 export type Metric = { label: string; value: number; format?: (value: number) => string };
 
+export type Layer = "bronze" | "silver" | "gold" | "serve";
+
+export const LAYERS: Record<Layer, { name: string; tag: string; files: string; color: string }> = {
+  bronze: { name: "Bronce", tag: "crudo e inmutable", files: "data/spe/week-*.parquet · data/jobspy/day-*.parquet", color: "#b87333" },
+  silver: { name: "Plata", tag: "limpio y enriquecido", files: "derived/runs/<id>/ postings · skill_mentions · duplicates · tfidf", color: "#8e959e" },
+  gold: { name: "Oro", tag: "listo para consumir", files: "dashboard.json · modelos · grafo · serving/", color: "#c9971a" },
+  serve: { name: "Consumo", tag: "API y web", files: "sextante_api · /api/cv/match", color: "#e0761b" },
+};
+
 export type Step = {
   key: string;
+  layer: Layer;
+  short: string;
+  caption: string;
+  param: string;
   title: string;
   lead: string;
   inside: string[];
@@ -19,6 +32,10 @@ const decimal = (value: number) => value.toFixed(2);
 export const STEPS: Step[] = [
   {
     key: "capture",
+    layer: "bronze",
+    short: "Captura",
+    caption: "Cada fuente se traduce al mismo esquema de 17 columnas.",
+    param: "17 columnas",
     title: "Captura y esquema canónico",
     lead: "Cada 12 horas bajamos la exportación oficial del SPE y cada 30 minutos consultamos portales como LinkedIn e Indeed. Cada fuente nombra sus campos a su manera.",
     inside: [
@@ -35,6 +52,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "store",
+    layer: "bronze",
+    short: "Append-only",
+    caption: "Una vacante ya vista nunca se reescribe: la copia repetida se descarta.",
+    param: "clave = id | url",
     title: "Almacén que solo agrega",
     lead: "Una vacante ya vista nunca se reescribe: conserva la primera fecha en que la vimos. Si vuelve a llegar, se descarta la copia nueva.",
     inside: [
@@ -47,6 +68,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "repair",
+    layer: "silver",
+    short: "Reparación",
+    caption: "El texto doblemente codificado vuelve a ser legible.",
+    param: "cp1252 → UTF-8",
     title: "Reparamos el texto dañado",
     lead: "Parte de la exportación llega doblemente codificada: “TÃ©cnico” era “Técnico”. Se repara antes de leer nada.",
     inside: [
@@ -59,6 +84,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "clean",
+    layer: "silver",
+    short: "Limpieza",
+    caption: "Minúsculas, sin tildes, sin palabras vacías ni frases de plantilla.",
+    param: "NFKD · stopwords",
     title: "Limpiamos y normalizamos",
     lead: "Minúsculas, sin tildes, solo palabras. Después quitamos lo que no describe el trabajo: palabras vacías y frases de plantilla.",
     inside: [
@@ -71,6 +100,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "skills",
+    layer: "silver",
+    short: "ESCO",
+    caption: "Un trie encuentra habilidades ESCO; siempre gana la coincidencia más larga.",
+    param: "trie · más larga",
     title: "Reconocemos habilidades ESCO",
     lead: "Buscamos en cada descripción las habilidades de ESCO, la taxonomía europea, en español y con sinónimos colombianos.",
     inside: [
@@ -87,6 +120,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "duplicates",
+    layer: "silver",
+    short: "Duplicados",
+    caption: "MinHash propone parecidos y el coseno TF-IDF confirma el duplicado.",
+    param: "MinHash 64 · cos ≥ 0,90",
     title: "Detectamos duplicados por texto",
     lead: "La misma vacante aparece en varios portales con otra clave. La encontramos por parecido del texto, no por el título.",
     inside: [
@@ -105,6 +142,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "tfidf",
+    layer: "silver",
+    short: "TF-IDF",
+    caption: "Cada vacante se vuelve un vector: pesa lo propio, no lo común.",
+    param: "1–2 gramas · L2",
     title: "Convertimos texto en vectores",
     lead: "Cada vacante se vuelve un vector: pesa más una palabra frecuente en esa vacante y rara en las demás.",
     inside: [
@@ -117,6 +158,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "topics",
+    layer: "gold",
+    short: "Temas",
+    caption: "NMF descompone los vectores en temas de palabras que van juntas.",
+    param: "NMF · k = 2",
     title: "Descubrimos temas",
     lead: "NMF descompone la matriz de vectores en temas: grupos de términos que suelen aparecer juntos, y cuánto de cada tema tiene cada vacante.",
     inside: [
@@ -129,6 +174,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "segments",
+    layer: "gold",
+    short: "Segmentos",
+    caption: "K-Means agrupa por lo que piden; la silueta elige cuántos grupos.",
+    param: "SVD + K-Means",
     title: "Formamos segmentos ocupacionales",
     lead: "Agrupamos por lo que piden, no por cómo se llaman. Así “Analista junior” cae donde corresponde.",
     inside: [
@@ -148,6 +197,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "salary",
+    layer: "gold",
+    short: "Salario",
+    caption: "Una regresión logística predice la banda de quien no publica salario.",
+    param: "softmax · C = 2",
     title: "Estimamos el rango salarial",
     lead: "Las vacantes publican rangos oficiales, no cifras exactas. Un modelo aprende a predecir el rango a partir del texto.",
     inside: [
@@ -168,6 +221,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "graph",
+    layer: "gold",
+    short: "Grafo",
+    caption: "Habilidades pedidas juntas se conectan: salen familias y rutas.",
+    param: "Louvain · PageRank",
     title: "Conectamos habilidades y ocupaciones",
     lead: "Dos habilidades pedidas en la misma vacante quedan unidas. De ese grafo salen familias de habilidades y caminos entre ocupaciones.",
     inside: [
@@ -185,6 +242,10 @@ export const STEPS: Step[] = [
   },
   {
     key: "cv",
+    layer: "serve",
+    short: "Tu CV",
+    caption: "Tu CV se compara con cada vacante: mitad texto, mitad habilidades.",
+    param: "½ coseno + ½ cobertura",
     title: "Comparamos tu CV",
     lead: "Tu CV recorre el mismo camino: se limpia, se vectoriza con el mismo vocabulario y se detectan sus habilidades. Edítalo y mira cómo cambia el resultado.",
     inside: [
