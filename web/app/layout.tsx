@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, IBM_Plex_Mono, Instrument_Serif } from "next/font/google";
+import { Fragment_Mono } from "next/font/google";
 import Link from "next/link";
 
 import "./globals.css";
 import "./design.css";
 import { GlowButton } from "@/components/glow-button";
-import { Glyph } from "@/components/glyph";
 import { FlickerLink } from "@/components/shell/flicker-link";
 import { Orb } from "@/components/shell/orb";
 import { SoundToggle } from "@/components/shell/sound-toggle";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Wordmark } from "@/components/wordmark";
 import { cn } from "@/lib/utils";
 
-const grotesk = Hanken_Grotesk({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font-sans" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
-const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif" });
+// Boska (display serif) and Switzer (text) come from Fontshare's CDN: the ITF
+// licence allows web use but not redistributing the files in this repo.
+const FONTSHARE = "https://api.fontshare.com/v2/css?f[]=boska@400,500,400i&f[]=switzer@300,400,500&display=swap";
+const mono = Fragment_Mono({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "SEXTANTE: el mercado laboral colombiano, leído desde el texto",
@@ -38,11 +39,16 @@ const pad = (i: number) => `[${String(i + 1).padStart(2, "0")}]`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={cn(grotesk.variable, mono.variable, serif.variable)}>
+    <html lang="es" className={cn(mono.variable)}>
+      <head>
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONTSHARE} />
+      </head>
       <body>
         <TooltipProvider delayDuration={120}>
           <header className="topbar">
-            <Link href="/" className="brand" aria-label="SEXTANTE, inicio"><Glyph /><span>sextan<b>te</b></span></Link>
+            <Link href="/" className="brand" aria-label="SEXTANTE, inicio"><Wordmark /></Link>
             <nav className="nav" aria-label="Principal">
               <FlickerLink href="/dashboard">Dashboard</FlickerLink>
               <FlickerLink href="/#como-funciona">Cómo funciona</FlickerLink>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { Glyph } from "@/components/glyph";
+import { Wordmark } from "@/components/wordmark";
 import { GlowButton } from "@/components/glow-button";
 import { gsap } from "@/components/motion/gsap";
 import { worldState } from "@/components/world/state";
@@ -55,7 +55,7 @@ export function Intro() {
   return createPortal(
     <div className="intro" ref={ref} style={{ clipPath: "inset(0 0 0 0)" }} role="dialog" aria-label="Bienvenida">
       <div className="intro-center">
-        <span className="brand"><Glyph /><span>sextan<b>te</b></span></span>
+        <span className="brand"><Wordmark /></span>
         <p className="mono">El mercado laboral colombiano,<br />leído desde el texto de sus vacantes</p>
         <span className="intro-progress" aria-hidden="true"><i style={{ transform: "scaleX(0)" }} /></span>
       </div>

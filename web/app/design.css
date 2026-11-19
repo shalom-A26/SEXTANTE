@@ -1,3 +1,8 @@
+/* Type: Boska (display serif, Fontshare), Switzer (text, Fontshare), Fragment Mono (labels). */
+:root {
+  --font-serif: "Boska", Georgia, "Times New Roman", serif;
+  --font-sans: "Switzer", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
 /* SEXTANTE design language (inspired by emotion-agency.com, in our own palette):
    condensed serif display + serif italic accents, mono labels, glass pills with a
    spinning gradient stroke, a dusk world under the chapters, cream paper after. */
@@ -7,8 +12,8 @@
   text-transform: uppercase; line-height: 1.35; word-spacing: 0.25em; }
 .label { color: var(--sx-muted); }
 .serif { font-family: var(--font-serif), Georgia, serif; font-weight: 400; }
-.display { font-family: var(--font-serif), Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: -0.015em;
-  line-height: 0.92; font-size: clamp(2.8rem, 6.6vw, 6.4rem); }
+.display { font-family: var(--font-serif), Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: -0.005em;
+  line-height: 0.95; font-size: clamp(2.5rem, 5.6vw, 5.4rem); }
 .display i, .display em, .it { font-family: var(--font-serif), Georgia, serif; font-style: italic; text-transform: none; letter-spacing: -0.02em; }
 .display em { color: var(--sx-accent); font-style: normal; text-transform: uppercase; }
 .arrow { display: inline-block; font-family: var(--font-sans), sans-serif; font-weight: 300; font-size: 0.5em; vertical-align: 0.3em; }
@@ -66,9 +71,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(var(--fg-rgb), 0.25) transpa
   transition: color 0.5s var(--ease);
 }
 .topbar a { text-decoration: none; }
-.brand { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-serif), serif; font-size: 1.55rem; letter-spacing: -0.01em; line-height: 1; }
-.brand b { font-weight: 400; color: var(--sx-accent); }
-.glyph { width: 22px; height: 22px; color: var(--sx-accent); }
+.brand { display: inline-flex; align-items: center; color: inherit; }
+.wordmark { display: inline-flex; align-items: baseline; font-family: var(--font-serif), serif; font-weight: 500; font-size: 1.6rem;
+  letter-spacing: -0.01em; line-height: 1; }
+.wordmark-x { width: 0.62em; height: 0.72em; margin: 0 0.01em; align-self: baseline; transform: translateY(0.05em); overflow: visible; }
 .nav { display: flex; gap: 32px; }
 .nav a { position: relative; }
 .flicker span { display: inline-block; white-space: pre; }
@@ -89,7 +95,7 @@ main { min-height: 70vh; }
 .intro { position: fixed; inset: 0; z-index: 100; display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 48px 24px;
   background: var(--paper); color: var(--wine); }
 .intro-center { align-self: center; display: grid; justify-items: center; gap: 18px; text-align: center; }
-.intro .brand { font-size: 2.4rem; }
+.intro .wordmark { font-size: 3rem; }
 .intro-progress { width: 180px; height: 1px; background: rgba(46, 18, 17, 0.15); overflow: hidden; }
 .intro-progress i { display: block; height: 100%; background: var(--sx-accent); transform-origin: left; }
 .intro-actions { display: grid; justify-items: center; gap: 18px; }
@@ -117,14 +123,14 @@ main { min-height: 70vh; }
   background: linear-gradient(180deg, rgba(46, 18, 17, 0.28), transparent 22%, transparent 62%, rgba(46, 18, 17, 0.45)); }
 .chapter { position: absolute; inset: 0; padding: 120px 48px 44px; display: grid; pointer-events: none; color: #fbf1ec; }
 .chapter > * { pointer-events: auto; }
-.chapter .display { font-size: clamp(2.8rem, 5.6vw, 5.4rem); }
+.chapter .display { font-size: clamp(2.5rem, 4.9vw, 4.7rem); }
 .chapter .display i { font-size: 1.08em; }
 .chapter .mono { max-width: 34ch; }
 .ch-word { display: inline-block; }
 /* Five compositions, like the reference: the copy moves around the frame. */
 .ch-1 { grid-template-columns: 1fr 2.6fr; grid-template-rows: 1fr auto auto; column-gap: 24px; }
 .ch-1 .mono { grid-column: 1; grid-row: 2; margin-bottom: 28px; }
-.ch-1 .ch-lead { grid-column: 1; grid-row: 3; align-self: start; font-size: clamp(3rem, 6vw, 5.6rem); }
+.ch-1 .ch-lead { grid-column: 1; grid-row: 3; align-self: start; font-size: clamp(2.6rem, 5.2vw, 4.9rem); }
 .ch-1 .display { grid-column: 2; grid-row: 3; }
 .ch-2 { align-content: center; justify-items: start; gap: 22px; }
 .ch-2 .display { max-width: 11ch; }
@@ -136,7 +142,7 @@ main { min-height: 70vh; }
 .ch-5 { grid-template-columns: 1fr 2.6fr; grid-template-rows: 1fr auto auto auto; column-gap: 24px; row-gap: 18px; }
 .ch-5 .pill { grid-column: 1; grid-row: 2; }
 .ch-5 .mono { grid-column: 1; grid-row: 3; }
-.ch-5 .ch-lead { grid-column: 1; grid-row: 4; font-size: clamp(3rem, 6vw, 5.6rem); }
+.ch-5 .ch-lead { grid-column: 1; grid-row: 4; font-size: clamp(2.6rem, 5.2vw, 4.9rem); }
 .ch-5 .display { grid-column: 2; grid-row: 4; }
 .ch-5 .ch-cta { grid-column: 2; grid-row: 2 / 4; justify-self: start; align-self: end; display: flex; gap: 24px; align-items: center; color: #fbf1ec; }
 .ch-5 .u-link { color: #fbf1ec; }
@@ -179,8 +185,8 @@ main { min-height: 70vh; }
 /* Profiles: the "projects" grid, one card per occupational segment */
 .profiles { padding: 140px 48px 120px; }
 .profiles-title { display: grid; grid-template-columns: 1fr 1fr auto 1fr; align-items: end; margin-bottom: 96px; }
-.profiles-title .display { font-size: clamp(3.4rem, 9vw, 9rem); }
-.profiles-title .it { font-size: clamp(3.4rem, 9vw, 9rem); line-height: 0.9; }
+.profiles-title .display { font-size: clamp(3rem, 7.6vw, 7.6rem); }
+.profiles-title .it { font-size: clamp(3rem, 7.6vw, 7.6rem); line-height: 0.9; }
 .profiles-title .arrow-r { font-size: clamp(2rem, 4vw, 3.6rem); color: var(--sx-accent); justify-self: center; }
 .profiles-title > :last-child { justify-self: end; }
 .p-grid { display: grid; grid-template-columns: repeat(12, 1fr); row-gap: 96px; column-gap: 24px; }
@@ -209,7 +215,7 @@ main { min-height: 70vh; }
 /* Ledger: the corpus figures, laid out like an awards table */
 .ledger { padding: 120px 48px 140px; }
 .ledger-top { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 24px; margin-bottom: 36px; }
-.ledger-top .display { font-size: clamp(3rem, 7vw, 7rem); }
+.ledger-top .display { font-size: clamp(2.6rem, 6vw, 6rem); }
 .ledger-top .display i { color: var(--sx-accent); }
 .ledger-groups { list-style: none; margin: 0; padding: 0; }
 .ledger-group { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 18px 0 8px; transition: opacity 0.4s; }
@@ -226,7 +232,7 @@ main { min-height: 70vh; }
 .footer { position: relative; z-index: 1; background: var(--bg); padding: 120px 48px 28px; display: grid; gap: 64px; }
 .footer-main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: end; }
 .footer-cta { display: grid; gap: 22px; text-decoration: none; }
-.footer-cta .display { font-size: clamp(3.4rem, 8vw, 8.4rem); transition: color 0.5s var(--ease); }
+.footer-cta .display { font-size: clamp(3rem, 6.8vw, 7rem); transition: color 0.5s var(--ease); }
 .footer-cta .display i { color: var(--sx-accent); }
 .footer-cta:hover .display { color: var(--sx-accent); }
 .footer-side { display: grid; gap: 48px; }
@@ -241,7 +247,7 @@ main { min-height: 70vh; }
 /* ---------- App pages (dashboard, CV) ---------- */
 .dashboard, .cv { max-width: 1340px; margin: 0 auto; padding: 132px 48px 96px; }
 .page-head { display: grid; gap: 22px; margin-bottom: 40px; }
-.page-title, .cv-intro h1 { font-family: var(--font-serif), serif; font-weight: 400; text-transform: uppercase; font-size: clamp(2.8rem, 6vw, 6rem); line-height: 0.92; letter-spacing: -0.015em; max-width: 16ch; }
+.page-title, .cv-intro h1 { font-family: var(--font-serif), serif; font-weight: 400; text-transform: uppercase; font-size: clamp(2.4rem, 5vw, 5rem); line-height: 0.92; letter-spacing: -0.015em; max-width: 16ch; }
 .page-title i, .cv-intro h1 i { text-transform: none; }
 
 @media (max-width: 960px) {
@@ -278,7 +284,7 @@ main { min-height: 70vh; }
 .ledger-rows small { color: var(--sx-muted); }
 .glow-btn { justify-self: start; }
 .hw { max-width: none; padding: 140px 48px 80px; }
-.hw-head h2.display { font-size: clamp(3rem, 7vw, 7rem); margin: 18px 0 22px; }
+
 .profiles-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; column-gap: 0.25em; }
 .profiles-title .arrow-r { margin-left: auto; padding-right: 0.3em; }
 @media (max-width: 960px) { .hw { padding: 96px 20px 64px; } }
