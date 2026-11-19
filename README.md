@@ -26,7 +26,7 @@ access); the GitHub repository is public so the Actions cron runs are free.
 > capture (`backend/src/sextante/ingestion/`), batch analytics for Stages 2–6
 > (`backend/src/sextante/analytics/`, see [`docs/analytics.md`](docs/analytics.md)) and the
 > Stage 8 MVP — FastAPI backend (`backend/src/sextante/api/`) and Next.js web app
-> (`web/`), see [`docs/mvp.md`](docs/mvp.md). What is still pending (a full
+> (`frontend/`), see [`docs/mvp.md`](docs/mvp.md). What is still pending (a full
 > run on the real corpus, manual validation, deployment) is tracked in
 > [`docs/roadmap.md`](docs/roadmap.md). The canonical 17-column schema is the
 > contract every later stage consumes.
@@ -91,6 +91,37 @@ Stage 1 already publishes: `url`, `description`, `vacancy_id`.
 | 2 | Shalom Jhoana Arrieta Marrugo | T00082962 |
 | 3 | Karla Andrea Barraza Torres | T00082880 |
 | 4 | Katlyn Gutiérrez Cardona | T00082259 |
+
+## Repository layout
+
+```
+SEXTANTE/
+├── backend/                     # everything Python, one installable package
+│   ├── src/sextante/
+│   │   ├── core/                # shared contract: 17-column schema, paths, .env
+│   │   ├── ingestion/           # Stage 1 capture: SPE + JobSpy → append-only stores → HF
+│   │   ├── analytics/           # Stages 2–6: cleaning, ESCO, duplicates, TF-IDF, segments, salary, graph
+│   │   └── api/                 # Stage 8 FastAPI: dashboard aggregates, CV matching
+│   ├── tests/                   # unittest suite (capture, emission, analytics, API)
+│   ├── requirements/            # pinned dependencies: base, analysis, api, dev, embeddings, notebooks
+│   ├── pyproject.toml           # package metadata + ruff
+│   └── Dockerfile               # API image (deployed on Render via render.yaml)
+├── frontend/                    # Next.js app: landing, dashboard, CV flow (deployed on Vercel)
+├── data/                        # local stores and analytics runs (gitignored, rebuilt from Hugging Face)
+├── docs/                        # architecture (C4 + medallion view), analytics, MVP, roadmap
+├── notebooks/                   # course demo notebook
+├── scripts/                     # manual capture wrapper, one-off HF migration
+├── .github/workflows/           # scheduled capture, daily analytics, CI
+└── render.yaml                  # Render blueprint for the API
+```
+
+There is no separate `shared/` folder on purpose: frontend and backend share
+no code. What they share is a **contract**, the 17-column canonical schema
+(`backend/src/sextante/core/schema.py`) and the API responses (mirrored as
+types in `frontend/lib/api.ts`); `sextante.core` is that shared layer on the
+backend side. Commands run from the repository root (`python -m
+sextante.ingestion …`, `python -m sextante.analytics …`) so `data/` stays in
+one place.
 
 ## How it works (Stage 1)
 
@@ -165,7 +196,7 @@ plus `ruff check backend` on every push and pull request (`.github/workflows/tes
 uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
 python -m sextante.analytics demo                 # synthetic run → data/analysis/runs/
 uvicorn sextante.api.main:app --port 8000        # API on the newest run
-cd web && npm install && npm run dev             # web app on http://localhost:3000
+cd frontend && npm install && npm run dev             # web app on http://localhost:3000
 ```
 
 Real corpus: `python -m sextante.analytics run --esco-csv skills_es.csv [--upload]`

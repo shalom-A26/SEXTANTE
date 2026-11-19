@@ -7,7 +7,7 @@
 | Part | Path | Role |
 |---|---|---|
 | API | `backend/src/sextante/api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
-| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP, three.js) | Landing, dashboard with three perspectives, CV flow |
+| Web | `frontend/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP, three.js) | Landing, dashboard with three perspectives, CV flow |
 
 ## Running locally
 
@@ -15,7 +15,7 @@
 uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
 python -m sextante.analytics demo          # or a real run, or SEXTANTE_HF_REPO
 uvicorn sextante.api.main:app --port 8000
-cd web && cp .env.example .env.local && npm install && npm run dev
+cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
 The API picks its run from `SEXTANTE_RUN_DIR`, else downloads
@@ -69,15 +69,15 @@ run.
 
 ## Web: components and motion
 
-- **shadcn/ui** (`web/components/ui/`, radix-nova style). Its CSS variables are
+- **shadcn/ui** (`frontend/components/ui/`, radix-nova style). Its CSS variables are
   mapped to the dusk palette in `app/globals.css`. The page's own tokens are
   prefixed `--sx-*` so they don't collide with shadcn's `--muted`,
   `--accent` and `--radius`. The hand-written CSS stays unlayered so it wins
   over Tailwind's preflight.
-- **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
+- **GSAP** (`frontend/components/motion/`). It registers ScrollTrigger,
   ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
-- **Design language** (`web/app/design.css`, inspired by emotion-agency.com
+- **Design language** (`frontend/app/design.css`, inspired by emotion-agency.com
   in SEXTANTE's palette): Boska (display serif) and Switzer (text) from
   Fontshare's CDN (ITF licence: web use, no redistribution, so no font files
   in the repo), Fragment Mono for labels. The wordmark (`components/wordmark.tsx`)
@@ -117,13 +117,13 @@ run.
   normalization, stopwords/templates, ESCO trie longest match, shingles +
   MinHash(64) + LSH + TF-IDF cosine, TF-IDF, NMF, SVD + K-Means by silhouette,
   salary bands + softmax regression, co-occurrence graph with
-  Louvain/PageRank/Dijkstra, CV matching). `node web/scripts/check-guide.ts`
+  Louvain/PageRank/Dijkstra, CV matching). `node frontend/scripts/check-guide.ts`
   asserts the invariants. See the medallion view in
   [architecture.md](architecture.md#medallion-view).
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
   profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
-  (`web/app/icon.svg`).
+  (`frontend/app/icon.svg`).
 - **Dashboard and CV.**
   - KPIs count up and bars grow.
   - The graph draws its edges.
@@ -158,7 +158,7 @@ pools keep ~150 MB of freed buffers.
   asked. CORS allows `http://localhost:3000` and any `https://*.vercel.app`
   (`SEXTANTE_CORS_ORIGINS`, `SEXTANTE_CORS_ORIGIN_REGEX`). The free instance
   sleeps after 15 min idle; the first request then takes ~1 min.
-- **Web: Vercel**, root directory `web/`, env `NEXT_PUBLIC_API_URL` = the
+- **Web: Vercel**, root directory `frontend/`, env `NEXT_PUBLIC_API_URL` = the
   Render URL (build-time variable: redeploy after changing it).
 - Hugging Face Docker Spaces were the first choice but now require a PRO
   subscription.

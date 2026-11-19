@@ -12,7 +12,7 @@
 | 4 · Segmentation | `features.py`, `comparison.py` | K-Means published; Ward/DBSCAN/t-SNE compared |
 | 5 · Supervised | `supervised.py` | Salary-band classifier (SPE bands), CV vs majority baseline |
 | 6 · Graph | `graph.py` | Skill communities/centrality, segment transition routes |
-| 8 · MVP | `backend/src/sextante/api/`, `web/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps; editorial redesign with a WebGL landing and an interactive pipeline guide (2026-11-19) |
+| 8 · MVP | `backend/src/sextante/api/`, `frontend/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps; editorial redesign with a WebGL landing and an interactive pipeline guide (2026-11-19) |
 | Quality | `backend/tests/`, `tests.yml` | 93 tests + ruff in CI; demo run for end-to-end checks |
 
 Verified on a synthetic demo run only (tests, `next build`, manual browser
@@ -64,7 +64,7 @@ terms at k=16–20, then run with `upload=true`.
    have the team label the CSVs (≈ 450 rows), then `evaluate`; report
    precision ± CI in the course document. Human work.
 4. **Deploy** — API on Render (free, `render.yaml`, serving bundle) + web on
-   Vercel (root `web/`), see [mvp.md](mvp.md#deployment). Serving bundle of
+   Vercel (root `frontend/`), see [mvp.md](mvp.md#deployment). Serving bundle of
    run `20261101T170836441392Z-cd50c976` is published; Render service and
    Vercel project are being set up.
 5. **Optional improvements**

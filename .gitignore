@@ -24,9 +24,9 @@ data/_published.json
 # Analytics runs (rebuildable; published under derived/ on HF)
 data/analysis/
 
-# Web app
-web/node_modules/
-web/.next/
-web/next-env.d.ts
-web/.env*.local
-web/*.tsbuildinfo
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/.env*.local
+frontend/*.tsbuildinfo

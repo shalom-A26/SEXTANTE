@@ -223,7 +223,7 @@ flowchart LR
     batch["sextante.analytics run<br/>(manual, pinned revision)"]
     derived["HF Hub<br/>derived/runs/&lt;id&gt; · latest.json"]
     api["sextante.api<br/>FastAPI (in-memory run)"]
-    web["web/<br/>Next.js dashboard + CV"]
+    web["frontend/<br/>Next.js dashboard + CV"]
     user(("Candidate / employer /<br/>academic program"))
 
     hub --> batch --> derived --> api

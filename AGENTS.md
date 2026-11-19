@@ -41,11 +41,11 @@ requirements, not extras.
 | 5 · Supervised models | Salary estimation / classification | ✅ `supervised.py` |
 | 6 · Skills–occupations graph | Communities, centrality, transition routes | ✅ `graph.py` |
 | 7 · Distributed | Apache Spark if volume justifies it | ⏸ not needed so far |
-| 8 · MVP product | Web app + dashboard + CV matching & recommendations | ✅ `backend/src/sextante/api/` + `web/` (not deployed) |
+| 8 · MVP product | Web app + dashboard + CV matching & recommendations | ✅ `backend/src/sextante/api/` + `frontend/` (not deployed) |
 
 **Operating rule for agents**: the repository contains all stages:
 capture (`backend/src/sextante/ingestion/`), batch analytics for Stages 2–6 (`backend/src/sextante/analytics/`),
-the FastAPI backend (`backend/src/sextante/api/`) and the Next.js web app (`web/`).
+the FastAPI backend (`backend/src/sextante/api/`) and the Next.js web app (`frontend/`).
 Analytics reads the published corpus and writes only to `derived/` on HF; it
 never edits or republishes source rows. The API only reads a run and never
 stores uploaded CVs. Open work is tracked in `docs/roadmap.md` — keep it
@@ -82,7 +82,7 @@ uv pip install -r backend/requirements/api.txt    # analysis + API stack (then -
 .venv/bin/python -m sextante.analytics review <run_dir>    # manual-review CSVs
 .venv/bin/python -m sextante.analytics evaluate <run_dir>/review
 .venv/bin/uvicorn sextante.api.main:app --port 8000
-(cd web && npm install && npm run dev)        # http://localhost:3000
+(cd frontend && npm install && npm run dev)        # http://localhost:3000
 
 # Tests (analysis/API tests need backend/requirements/api.txt) + lint
 python -m unittest discover -s backend/tests
@@ -196,7 +196,7 @@ Hugging Face simultaneously. Both can also be triggered manually with
 - `backend/src/sextante/api/` — FastAPI: run loading (`data.py`), CV text extraction in
   memory (`cv.py`), dashboard aggregates and CV matching (`insights.py`),
   app (`main.py`).
-- `web/` — Next.js 16 app: landing, `/dashboard` (candidates, employers,
+- `frontend/` — Next.js 16 app: landing, `/dashboard` (candidates, employers,
   academic programs, market map), `/cv` (upload, matches, niches, pivots).
 - `notebooks/01_text_mining_and_segments.ipynb` — course demo (synthetic data
   by default).
