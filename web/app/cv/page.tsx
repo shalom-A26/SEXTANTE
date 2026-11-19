@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Meter } from "@/components/charts";
-import { ScanCard } from "@/components/hero-cards";
+import { GlowButton } from "@/components/glow-button";
+import { ScanCard } from "@/components/scan-card";
 import { Magnetic, Reveal, SplitHeading } from "@/components/motion";
 import { gsap, MOTION_OK, ScrollTrigger, useGSAP } from "@/components/motion/gsap";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +56,8 @@ export default function CvPage() {
   return (
     <div className="cv">
       <section className="cv-intro">
-        <SplitHeading as="h1" onScroll={false}>¿A qué vacantes se parece tu perfil?</SplitHeading>
+        <span className="pill">Análisis de CV</span>
+        <SplitHeading as="h1" onScroll={false}><>¿A qué vacantes <i>se parece</i> tu perfil?</></SplitHeading>
         <Reveal delay={0.4}>
           <p className="lead">
             Comparamos tu CV con las vacantes del corpus: texto y habilidades ESCO. Te mostramos las vacantes más afines con su
@@ -97,7 +98,7 @@ export default function CvPage() {
               </SelectContent>
             </Select>
             <Magnetic>
-              <Button type="submit" className="cta" disabled={loading}>{loading ? "Analizando…" : "Analizar CV"}</Button>
+              <GlowButton type="submit" solid disabled={loading}>{loading ? "Analizando…" : "Analizar CV"}</GlowButton>
             </Magnetic>
           </div>
           {error && <p className="notice error">{error}</p>}
@@ -106,7 +107,7 @@ export default function CvPage() {
 
       {loading && (
         <div className="cv-loading" role="status">
-          <ScanCard standalone />
+          <ScanCard />
           <p className="muted">Leyendo tu CV y comparándolo con miles de vacantes…</p>
         </div>
       )}
@@ -177,7 +178,7 @@ function Results({ result }: { result: CvResult }) {
                   {m.missing_skills.slice(0, 4).map((s) => <Badge key={s} variant="outline" className="chip miss">+ {s}</Badge>)}
                 </span>
               </div>
-              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme</a>
+              <GlowButton href={m.url} external size="sm" className="apply-btn">Postularme</GlowButton>
             </li>
           ))}
         </ul>

@@ -19,4 +19,7 @@ gsap.config({ nullTargetWarn: false });
 export const MOTION_OK = "(prefers-reduced-motion: no-preference)";
 export const FINE_POINTER = "(prefers-reduced-motion: no-preference) and (pointer: fine)";
 
+// Dev only: lets browser automation drive the timeline (e.g. disable lag smoothing).
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") Object.assign(window, { gsap });
+
 export { gsap, ScrollTrigger, SplitText, useGSAP };

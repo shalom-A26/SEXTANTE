@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk } from "next/font/google";
+import { Fragment_Mono } from "next/font/google";
 import Link from "next/link";
 
 import "./globals.css";
-import { SystemBackdrop } from "@/components/system-backdrop";
+import "./design.css";
+import { GlowButton } from "@/components/glow-button";
+import { ChartBackdrop } from "@/components/shell/chart-backdrop";
+import { FlickerLink } from "@/components/shell/flicker-link";
+import { Orb } from "@/components/shell/orb";
+import { SoundToggle } from "@/components/shell/sound-toggle";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Wordmark } from "@/components/wordmark";
 import { cn } from "@/lib/utils";
 
-const grotesk = Hanken_Grotesk({ subsets: ["latin"], weight: ["300", "400", "500"], variable: "--font-sans" });
+// Boska (display serif) and Switzer (text) come from Fontshare's CDN: the ITF
+// licence allows web use but not redistributing the files in this repo.
+const FONTSHARE = "https://api.fontshare.com/v2/css?f[]=boska@400,500,400i&f[]=switzer@300,400,500&display=swap";
+const mono = Fragment_Mono({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "SEXTANTE: el mercado laboral colombiano, leído desde el texto",
@@ -16,39 +25,70 @@ export const metadata: Metadata = {
     "Habilidades, salarios y perfiles ocupacionales extraídos de vacantes colombianas. Sube tu CV y descubre a qué vacantes te pareces.",
 };
 
-function Glyph() {
-  // A sextant: arc, two radii and the index arm.
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="glyph">
-      <path d="M4 18 A 11 11 0 0 1 20 18" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M12 4 L4 18 M12 4 L20 18 M12 4 L15 18" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <circle cx="12" cy="4" r="1.8" fill="currentColor" />
-    </svg>
-  );
-}
+const SECTIONS = [
+  ["Inicio", "/"],
+  ["Dashboard", "/dashboard"],
+  ["Cómo funciona", "/#como-funciona"],
+  ["Analizar mi CV", "/cv"],
+];
+const DATA = [
+  ["Hugging Face", "https://huggingface.co/datasets/pxtron/vacantes-colombia"],
+  ["Servicio Público de Empleo", "https://www.serviciodeempleo.gov.co/"],
+];
+
+const pad = (i: number) => `[${String(i + 1).padStart(2, "0")}]`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={cn("dark", grotesk.variable)}>
+    <html lang="es" className={cn(mono.variable)}>
+      <head>
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONTSHARE} />
+      </head>
       <body>
         <TooltipProvider delayDuration={120}>
-        <SystemBackdrop />
-        <header className="topbar">
-          <nav className="nav-left">
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href="/#como-funciona">Cómo funciona</Link>
-          </nav>
-          <Link href="/" className="brand"><Glyph />SEXTANTE</Link>
-          <nav className="nav-right">
-            <Link href="/cv" className="underline">Analizar mi CV</Link>
-          </nav>
-        </header>
-        <main>{children}</main>
-        <footer className="footer">
-          Proyecto académico de la Universidad Tecnológica de Bolívar con vacantes públicas del SPE y portales de empleo.
-          Tu CV se procesa en memoria y no se guarda.
-        </footer>
-        <Toaster position="bottom-right" />
+          <ChartBackdrop />
+          <header className="topbar">
+            <Link href="/" className="brand" aria-label="SEXTANTE, inicio"><Wordmark /></Link>
+            <nav className="nav" aria-label="Principal">
+              <FlickerLink href="/dashboard">Dashboard</FlickerLink>
+              <FlickerLink href="/#como-funciona">Cómo funciona</FlickerLink>
+              <FlickerLink href="/#perfiles">Perfiles</FlickerLink>
+            </nav>
+            <SoundToggle />
+            <GlowButton href="/cv" size="sm">Analiza tu CV</GlowButton>
+          </header>
+          <main>{children}</main>
+          <footer className="footer">
+            <div className="footer-main">
+              <Link href="/cv" className="footer-cta">
+                <span className="pill">Empieza aquí</span>
+                <span className="display"><i>Analiza</i> tu CV<br />y encuentra<br />tu lugar</span>
+              </Link>
+              <div className="footer-side">
+                <p className="mono">¿Tienes un CV? Te mostramos a qué vacantes colombianas te pareces, qué te falta y hacia dónde moverte.</p>
+                <div className="footer-cols">
+                  <div>
+                    <h4>Secciones ↘</h4>
+                    <ul>{SECTIONS.map(([l, h], i) => <li key={l}><span className="label">{pad(i)}</span><Link href={h} className="mono">{l}</Link></li>)}</ul>
+                  </div>
+                  <div>
+                    <h4>Datos ↘</h4>
+                    <ul>{DATA.map(([l, h], i) => (
+                      <li key={l}><span className="label">{pad(i)}</span><a href={h} className="mono" target="_blank" rel="noopener noreferrer">{l} ↗</a></li>
+                    ))}</ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="footer-bottom label">
+              <span>SEXTANTE · Universidad Tecnológica de Bolívar</span>
+              <span>Tu CV se procesa en memoria y no se guarda</span>
+            </div>
+          </footer>
+          <Orb />
+          <Toaster position="bottom-left" />
         </TooltipProvider>
       </body>
     </html>

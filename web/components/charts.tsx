@@ -17,10 +17,10 @@ function useEntrance<T extends Element>(animate: (q: (selector: string) => Eleme
   return ref;
 }
 
-// Warm-leaning but hue-separated so 8-10 segments stay distinguishable on burgundy.
+// Warm-leaning but hue-separated so 8-10 segments stay distinguishable on cream.
 export const PALETTE = [
-  "#f7a24b", "#8fd3c4", "#f27c8c", "#c7b3f5", "#f6d36b", "#7fb6ff", "#ecc0a8", "#a8d98a",
-  "#e59ad0", "#b9b0a6",
+  "#e0761b", "#2f8f7f", "#c8445a", "#6f55c4", "#b8860b", "#2f6fbf", "#a3542e", "#5a8f2e",
+  "#a8437f", "#7a6f66",
 ];
 
 type Bar = { label: string; value: number; hint?: string };
@@ -152,7 +152,7 @@ export function SkillGraph({ nodes, edges }: {
         const b = layout[e.target];
         if (!a || !b) return null;
         const active = !focus || e.source === focus || e.target === focus;
-        return <line key={i} className="edge" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ecc0a8"
+        return <line key={i} className="edge" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#c98a78"
           strokeWidth={0.4 + (2 * e.weight) / maxWeight} strokeOpacity={active ? 0.35 : 0.04}
           style={{ transition: "stroke-opacity 0.3s" }} />;
       })}

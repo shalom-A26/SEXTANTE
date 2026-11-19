@@ -15,10 +15,11 @@ they render in docs, editors and GitHub.
    - [Level 3 · Components](#level-3--components)
    - [Level 4 · Deployment](#level-4--deployment)
 3. [Data flow and scheduled capture](#data-flow-and-scheduled-capture)
-4. [Sequence: JobSpy capture](#sequence-jobspy-capture)
-5. [Sequence: SPE export](#sequence-spe-export)
-6. [Data model](#data-model)
-7. [Design decisions](#design-decisions)
+4. [Medallion view](#medallion-view)
+5. [Sequence: JobSpy capture](#sequence-jobspy-capture)
+6. [Sequence: SPE export](#sequence-spe-export)
+7. [Data model](#data-model)
+8. [Design decisions](#design-decisions)
 
 ---
 
@@ -267,6 +268,70 @@ Failure behavior:
   empty store would publish an empty dataset).
 - `rows_new` is `null` when there was no pull baseline — growth is never
   invented from the total.
+
+---
+
+## Medallion view
+
+SEXTANTE was not designed as a lakehouse, but its layers map cleanly onto the
+medallion pattern (bronze → silver → gold). The web guide ("Cómo funciona")
+draws the twelve techniques on these lanes.
+
+```mermaid
+flowchart LR
+    subgraph L["Landing (ephemeral)"]
+        spe_csv["SPE export CSV ~415 MB"]
+        jobspy_raw["JobSpy results"]
+    end
+    subgraph B["Bronze: raw, immutable"]
+        hf_spe["HF data/spe/week-*.parquet"]
+        hf_jobspy["HF data/jobspy/day-*.parquet"]
+    end
+    subgraph S["Silver: clean, enriched rows"]
+        postings["postings.parquet"]
+        mentions["skill_mentions.parquet"]
+        dups["duplicate_candidates.parquet"]
+        tfidf["tfidf_matrix.npz"]
+    end
+    subgraph G["Gold: ready to consume"]
+        dash["dashboard.json"]
+        models["salary_model.joblib + metrics"]
+        graphs["skill graph + transitions"]
+        serving["serving/ bundle"]
+    end
+    spe_csv -->|"pipeline capture: schema + append"| hf_spe
+    jobspy_raw -->|"pipeline capture: schema + append"| hf_jobspy
+    hf_spe -->|"analytics run: repair, ESCO, TF-IDF"| postings
+    hf_jobspy --> postings
+    postings --> mentions
+    postings --> dups
+    postings --> tfidf
+    tfidf -->|"NMF, K-Means, logistic"| models
+    mentions -->|"co-occurrence, Louvain, PageRank"| graphs
+    postings --> dash
+    models --> serving
+    graphs --> serving
+    dash --> serving
+    serving -->|"derived/latest.json"| api["FastAPI + web"]
+```
+
+| Layer | Where it lives | Code | Guarantee |
+|---|---|---|---|
+| Landing | SPE CSV export, JobSpy responses (never persisted) | `pipeline/sources/` | none: transient |
+| Bronze | HF `data/spe/week-*.parquet`, `data/jobspy/day-*.parquet`; local `data/store/<dataset>.parquet` | `pipeline/` (`schema.py`, `store.py`, `emit.py`, `sync.py`) | append-only (`keep="first"`), partitioned by capture date, byte-stable files, 17-column schema; content kept as captured (mojibake, templates, cross-source duplicates) |
+| Silver | HF `derived/runs/<run_id>/`: `postings.parquet` (repaired text, normalized departments, `cluster_id`), `skill_mentions.parquet`, `skill_aliases.parquet`, `duplicate_candidates.parquet`, `tfidf_matrix.npz` + vectorizer, `segment_projection.parquet` | `sextante_analysis/` (`cleaning.py`, `taxonomy.py`, `duplicates.py`, `features.py`) | row-level, cleaned and enriched; built from a revision-pinned corpus (`corpus.py`) |
+| Gold | same run: `dashboard.json`, `segment_stats.json`, `segment_profiles.csv`, `segment_skills.parquet`, `skill_graph_*.parquet`, `segment_transitions.parquet`, `topics.csv`, `supervised_metrics.json`, `salary_model.joblib`, `clustering_comparison.json`, `graph_metrics.json`, `eda.json`; `serving/` bundle; `derived/latest.json` pointer | `sextante_analysis/` (`supervised.py`, `graph.py`, `comparison.py`, `run.py`), `sextante_api/serving.py` | aggregates and models shaped for the API and the dashboard |
+
+Caveats, so the analogy is not oversold:
+
+- Bronze is not byte-raw: the canonical schema is applied on write
+  (schema-on-write), so source-specific fields are already renamed.
+- Silver and gold are full snapshots recomputed by each daily run, not
+  incremental tables; old runs stay under `derived/runs/` and
+  `derived/latest.json` points at the current one.
+- Lineage is recorded in each run's `manifest.json` (corpus revision and
+  file list); there are no separate data-quality tables, the invariants
+  are enforced by tests.
 
 ---
 

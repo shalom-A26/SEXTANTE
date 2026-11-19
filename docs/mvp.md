@@ -7,7 +7,7 @@
 | Part | Path | Role |
 |---|---|---|
 | API | `sextante_api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
-| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP) | Landing, dashboard with three perspectives, CV flow |
+| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP, three.js) | Landing, dashboard with three perspectives, CV flow |
 
 ## Running locally
 
@@ -77,26 +77,51 @@ run.
 - **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
   ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
-- **Landing.** One orchestrated entrance: the dusk settles, the grass grows,
-  the title rises word by word, the sextant draws itself and the figure
-  lights up. After that the grass sways in the wind, the needle drifts and
-  the scene follows the mouse with depth. On scroll, the statement lights up
-  word by word.
-- **"Cómo funciona"** (`web/components/how-it-works/`). A scroll walkthrough
-  of the nine real stages: capture, cleaning, ESCO skills, duplicates,
-  TF-IDF, segments, salary, graph and CV. `steps.ts` holds each stage's
-  explanation, what happens inside, its algorithm (formula or pseudocode) and
-  live figures read from `/api/dashboard`. `visuals.tsx` holds one animated
-  scene per stage. The scene sits in a sticky frame on wide screens and
-  changes as each step crosses the viewport. On narrow screens, or with
-  reduced motion, each static scene sits above its text.
-- **System backdrop** (`web/components/system-backdrop.tsx`). A fixed, faint
-  layer behind every page: rows of top skills, segment names and pipeline
-  terms drifting by, plus a skill-graph constellation with scroll parallax.
-  It is decorative (`aria-hidden`, no pointer events) and pauses while the
-  tab is hidden.
+- **Design language** (`web/app/design.css`, inspired by emotion-agency.com
+  in SEXTANTE's palette): Boska (display serif) and Switzer (text) from
+  Fontshare's CDN (ITF licence: web use, no redistribution, so no font files
+  in the repo), Fragment Mono for labels. The wordmark (`components/wordmark.tsx`)
+  is "se" + the SEXTANTE logo (`docs/assets/logo.svg`) + "tante". A
+  nautical-chart backdrop (`components/shell/chart-backdrop.tsx`: dusk wash,
+  contours, graticule with Colombian coordinates, compass rose, grain) sits
+  behind every page; surfaces are warm "liquid glass" (blur + gradient
+  hairline + inner highlight) like `GlowButton`, not hard 1px borders.
+- **Intro gate** (`components/landing/intro.tsx`, once per session): logo,
+  tagline, load progress, "Entrar con/sin sonido". The ambient sound
+  (`lib/ambient.ts`) is synthesised with Web Audio (wind + soft pad), so there
+  are no audio files; the header toggle mutes it.
+- **3D world** (`components/world/`). A procedural three.js dusk valley:
+  terrain with vertex colours, a reflecting lake (`Reflector`), standing
+  stones, ~70k instanced grass blades swaying in a shader, drifting petals and
+  a particle swarm that morphs per chapter (sextant → cloud → salary bars →
+  skills graph → CV, `shapes.ts`). Scroll drives the camera along a
+  Catmull-Rom path with a hold on each chapter; the pointer tilts it. It
+  pauses off screen. Reduced motion or no WebGL2: static SVG `DuskField` with
+  the chapters stacked.
+- **Landing** (`components/landing/`). `Chapters` (five compositions over the
+  world, words swap through masks with an RGB glitch), `WhatWeDo` (paragraph
+  lit word by word + the pipeline stages as an active list that jumps to the
+  guide), the guide, `Profiles` (segments as an irregular card grid with a
+  letter-by-letter data overlay) and `Ledger` (corpus figures as an awards
+  table).
+- **"Cómo funciona" guide** (`components/guide/`). Graphic first, little text:
+  a pipeline map (`pipeline-map.tsx`) draws the 12 techniques as a metro line
+  stepping down the medallion lanes (bronze → silver → gold → serving, with
+  the real file paths of each layer) while a dot, one posting, travels to the
+  active station. Each step shows a compact band (layer, title, one-line
+  caption, live corpus figures), an input → technique → output strip for the
+  selected row (`flow.tsx`), the step's chart and six row cards; the full
+  table, row editing, formulas and details sit in collapsible panels. Six
+  example postings (`rows.ts`, fictional and labelled so) are processed live by
+  `pipeline.ts`, a TypeScript mirror of the Python (mojibake repair,
+  normalization, stopwords/templates, ESCO trie longest match, shingles +
+  MinHash(64) + LSH + TF-IDF cosine, TF-IDF, NMF, SVD + K-Means by silhouette,
+  salary bands + softmax regression, co-occurrence graph with
+  Louvain/PageRank/Dijkstra, CV matching). `node web/scripts/check-guide.ts`
+  asserts the invariants. See the medallion view in
+  [architecture.md](architecture.md#medallion-view).
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
-  hero, backdrop, walkthrough and dashboard share a single fetch.
+  profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
   (`web/app/icon.svg`).
 - **Dashboard and CV.**
@@ -104,7 +129,7 @@ run.
   - The graph draws its edges.
   - Tabs have a sliding indicator.
   - Results cascade in and meters fill up.
-- **Page transitions:** a veil in `app/template.tsx`.
+- **Page transitions:** a veil in `app/template.tsx` (opacity only, so fixed layers stay fixed).
 - **Reduced motion:** everything runs inside
   `gsap.matchMedia("(prefers-reduced-motion: no-preference)")`. With reduced
   motion the page is static and complete. Mouse parallax runs only with a

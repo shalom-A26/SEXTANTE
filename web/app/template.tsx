@@ -12,7 +12,8 @@ export default function Template({ children }: { children: React.ReactNode }) {
       const q = gsap.utils.selector(ref);
       gsap.timeline()
         .fromTo(q(".page-veil"), { scaleY: 1 }, { scaleY: 0, transformOrigin: "50% 0%", duration: 0.9, ease: "expo.inOut" })
-        .from(q(".page-body"), { y: 40, opacity: 0, duration: 1, clearProps: "transform,opacity" }, 0.25)
+        // Opacity only: a transform here would trap the fixed layers (intro, header, orb).
+        .from(q(".page-body"), { opacity: 0, duration: 1, clearProps: "opacity" }, 0.25)
         .call(() => ScrollTrigger.refresh());
     });
   }, { scope: ref });
