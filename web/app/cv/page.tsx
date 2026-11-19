@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Meter } from "@/components/charts";
+import { GlowButton } from "@/components/glow-button";
 import { ScanCard } from "@/components/scan-card";
 import { Magnetic, Reveal, SplitHeading } from "@/components/motion";
 import { gsap, MOTION_OK, ScrollTrigger, useGSAP } from "@/components/motion/gsap";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,8 +56,8 @@ export default function CvPage() {
   return (
     <div className="cv">
       <section className="cv-intro">
-        <span className="pill">Análisis de CV · ESCO</span>
-        <SplitHeading as="h1" className="display" onScroll={false}>¿A qué vacantes se parece tu perfil?</SplitHeading>
+        <span className="pill">Análisis de CV</span>
+        <SplitHeading as="h1" onScroll={false}><>¿A qué vacantes <i>se parece</i> tu perfil?</></SplitHeading>
         <Reveal delay={0.4}>
           <p className="lead">
             Comparamos tu CV con las vacantes del corpus: texto y habilidades ESCO. Te mostramos las vacantes más afines con su
@@ -98,7 +98,7 @@ export default function CvPage() {
               </SelectContent>
             </Select>
             <Magnetic>
-              <Button type="submit" className="cta" disabled={loading}>{loading ? "Analizando…" : "Analizar CV"}</Button>
+              <GlowButton type="submit" solid disabled={loading}>{loading ? "Analizando…" : "Analizar CV"}</GlowButton>
             </Magnetic>
           </div>
           {error && <p className="notice error">{error}</p>}

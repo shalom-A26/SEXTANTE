@@ -77,23 +77,31 @@ run.
 - **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
   ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
-- **Editorial language** (inspired by emotion-agency.com, kept in the dusk
-  palette and Hanken Grotesk): IBM Plex Mono uppercase labels (`.label`,
-  `.pill`), giant uppercase display type (`.display`) with an accent word and
-  `↪` arrows, numbered lists `(001)` / `[01]` (CSS counters on dashboard
-  KPIs, panels and CV matches), a fixed blurred header with a rolling pill
-  and a giant footer call to action.
-- **WebGL scene** (`web/components/scene/`). A fixed three.js layer behind
-  the landing, portaled to `<body>` so the page-transition transform doesn't
-  resize it: sky shader with a setting sun and stars, a waving field of grass
-  points and the sextant drawn in lines. `sceneState.progress` (whole-page
-  scroll) turns dusk into night; the pointer tilts the camera. With reduced
-  motion or no WebGL2 it renders the static SVG `DuskField` instead.
-- **Landing** (`web/components/landing/`). `Chapters`: five pinned chapters
-  that swap word by word as you scroll (stacked, unpinned, below 768 px or
-  with reduced motion). Then `Audiences` (statement lit word by word +
-  numbered audiences), "Cómo funciona" and `Numbers` (the corpus ledger with
-  live counts).
+- **Design language** (`web/app/design.css`, inspired by emotion-agency.com in
+  SEXTANTE's palette): Instrument Serif condensed caps with italic accent words,
+  IBM Plex Mono labels, Hanken Grotesk for UI text. Cream paper (`--bg`) with
+  wine ink (`--fg`) everywhere; `.theme-dark` flips the tokens for anything
+  over the 3D world. `GlowButton` (`components/glow-button.tsx`): glass pill
+  with a spinning conic stroke, rolling label and a glow on hover. Header nav
+  letters flicker on hover; a floating orb links to `/cv`; thin scrollbar.
+- **Intro gate** (`components/landing/intro.tsx`, once per session): logo,
+  tagline, load progress, "Entrar con/sin sonido". The ambient sound
+  (`lib/ambient.ts`) is synthesised with Web Audio (wind + soft pad), so there
+  are no audio files; the header toggle mutes it.
+- **3D world** (`components/world/`). A procedural three.js dusk valley:
+  terrain with vertex colours, a reflecting lake (`Reflector`), standing
+  stones, ~70k instanced grass blades swaying in a shader, drifting petals and
+  a particle swarm that morphs per chapter (sextant → cloud → salary bars →
+  skills graph → CV, `shapes.ts`). Scroll drives the camera along a
+  Catmull-Rom path with a hold on each chapter; the pointer tilts it. It
+  pauses off screen. Reduced motion or no WebGL2: static SVG `DuskField` with
+  the chapters stacked.
+- **Landing** (`components/landing/`). `Chapters` (five compositions over the
+  world, words swap through masks with an RGB glitch), `WhatWeDo` (paragraph
+  lit word by word + the nine stages as an active list), "Cómo funciona",
+  `Profiles` (segments as an irregular card grid with generated covers and a
+  letter-by-letter data overlay) and `Ledger` (corpus figures as an awards
+  table; hovering a group dims the rest).
 - **"Cómo funciona"** (`web/components/how-it-works/`). A scroll walkthrough
   of the nine real stages: capture, cleaning, ESCO skills, duplicates,
   TF-IDF, segments, salary, graph and CV. `steps.ts` holds each stage's
@@ -102,13 +110,8 @@ run.
   scene per stage. The scene sits in a sticky frame on wide screens and
   changes as each step crosses the viewport. On narrow screens, or with
   reduced motion, each static scene sits above its text.
-- **System backdrop** (`web/components/system-backdrop.tsx`). A fixed, faint
-  layer behind the dashboard and CV pages (hidden on the landing): rows of top skills, segment names and pipeline
-  terms drifting by, plus a skill-graph constellation with scroll parallax.
-  It is decorative (`aria-hidden`, no pointer events) and pauses while the
-  tab is hidden.
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
-  corpus ledger, backdrop, walkthrough and dashboard share a single fetch.
+  profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
   (`web/app/icon.svg`).
 - **Dashboard and CV.**
@@ -116,7 +119,7 @@ run.
   - The graph draws its edges.
   - Tabs have a sliding indicator.
   - Results cascade in and meters fill up.
-- **Page transitions:** a veil in `app/template.tsx`.
+- **Page transitions:** a veil in `app/template.tsx` (opacity only, so fixed layers stay fixed).
 - **Reduced motion:** everything runs inside
   `gsap.matchMedia("(prefers-reduced-motion: no-preference)")`. With reduced
   motion the page is static and complete. Mouse parallax runs only with a

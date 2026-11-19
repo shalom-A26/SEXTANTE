@@ -202,10 +202,10 @@ export function buildTimeline(stepKey: string, el: HTMLElement): gsap.core.Timel
     case "segments":
       tl.fromTo(q(".seg-dot"), {
         attr: { cx: (_: number, t: Element) => Number(t.getAttribute("data-sx")), cy: (_: number, t: Element) => Number(t.getAttribute("data-sy")) },
-        fill: "#ecc0a8",
+        fill: "#e0761b",
       }, {
         attr: { cx: (_: number, t: Element) => Number(t.getAttribute("data-x")), cy: (_: number, t: Element) => Number(t.getAttribute("data-y")) },
-        fill: (_: number, t: Element) => t.getAttribute("data-c") ?? "#ecc0a8",
+        fill: (_: number, t: Element) => t.getAttribute("data-c") ?? "#e0761b",
         duration: 1.8, ease: "power3.inOut", stagger: { amount: 0.5, from: "random" },
       }, 0.2)
         .from(q(".centroid"), { scale: 0, transformOrigin: "50% 50%", duration: 0.6, ease: "back.out(3)", stagger: 0.1 }, 1.6);
@@ -222,7 +222,7 @@ export function buildTimeline(stepKey: string, el: HTMLElement): gsap.core.Timel
     case "cv": {
       const counter = { v: 0 };
       tl.fromTo(q(".cv-beam"), { top: "0%" }, { top: "100%", duration: 1.2, ease: "power1.inOut" }, 0)
-        .from(q(".cv-doc .hit"), { backgroundColor: "rgba(251,241,236,0.25)", duration: 0.4, stagger: 0.3 }, 0.3)
+        .from(q(".cv-doc .hit"), { backgroundColor: "rgba(46,18,17,0.18)", duration: 0.4, stagger: 0.3 }, 0.3)
         .from(q(".cv-fill"), { scaleX: 0, transformOrigin: "0 50%", duration: 1.4, ease: "power3.out" }, 1)
         .to(counter, {
           v: 92, duration: 1.4, ease: "power3.out",

@@ -63,8 +63,10 @@ export default function DashboardPage() {
       {data.run.synthetic && (
         <div className="notice warn">Datos sintéticos de demostración: ejecuta el análisis sobre el corpus real para ver cifras reales.</div>
       )}
-      <span className="pill">Dashboard · corpus SEXTANTE</span>
-      <SplitHeading as="h1" className="page-title display" onScroll={false}>El mercado laboral colombiano, en cifras</SplitHeading>
+      <div className="page-head">
+        <span className="pill">Dashboard</span>
+        <SplitHeading as="h1" className="page-title" onScroll={false}><>El mercado laboral <i>colombiano</i>, en cifras</></SplitHeading>
+      </div>
       <p className="muted">
         Datos actualizados al {new Date(data.run.created_at_utc).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" })} · se recalculan cada día
       </p>
