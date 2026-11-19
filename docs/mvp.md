@@ -7,7 +7,7 @@
 | Part | Path | Role |
 |---|---|---|
 | API | `sextante_api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
-| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP) | Landing, dashboard with three perspectives, CV flow |
+| Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP, three.js) | Landing, dashboard with three perspectives, CV flow |
 
 ## Running locally
 
@@ -77,11 +77,23 @@ run.
 - **GSAP** (`web/components/motion/`). It registers ScrollTrigger,
   ScrollToPlugin, ScrambleText, SplitText and DrawSVG once and exports these primitives:
   `Reveal`, `SplitHeading`, `CountUp` and `Magnetic`.
-- **Landing.** One orchestrated entrance: the dusk settles, the grass grows,
-  the title rises word by word, the sextant draws itself and the figure
-  lights up. After that the grass sways in the wind, the needle drifts and
-  the scene follows the mouse with depth. On scroll, the statement lights up
-  word by word.
+- **Editorial language** (inspired by emotion-agency.com, kept in the dusk
+  palette and Hanken Grotesk): IBM Plex Mono uppercase labels (`.label`,
+  `.pill`), giant uppercase display type (`.display`) with an accent word and
+  `↪` arrows, numbered lists `(001)` / `[01]` (CSS counters on dashboard
+  KPIs, panels and CV matches), a fixed blurred header with a rolling pill
+  and a giant footer call to action.
+- **WebGL scene** (`web/components/scene/`). A fixed three.js layer behind
+  the landing, portaled to `<body>` so the page-transition transform doesn't
+  resize it: sky shader with a setting sun and stars, a waving field of grass
+  points and the sextant drawn in lines. `sceneState.progress` (whole-page
+  scroll) turns dusk into night; the pointer tilts the camera. With reduced
+  motion or no WebGL2 it renders the static SVG `DuskField` instead.
+- **Landing** (`web/components/landing/`). `Chapters`: five pinned chapters
+  that swap word by word as you scroll (stacked, unpinned, below 768 px or
+  with reduced motion). Then `Audiences` (statement lit word by word +
+  numbered audiences), "Cómo funciona" and `Numbers` (the corpus ledger with
+  live counts).
 - **"Cómo funciona"** (`web/components/how-it-works/`). A scroll walkthrough
   of the nine real stages: capture, cleaning, ESCO skills, duplicates,
   TF-IDF, segments, salary, graph and CV. `steps.ts` holds each stage's
@@ -91,12 +103,12 @@ run.
   changes as each step crosses the viewport. On narrow screens, or with
   reduced motion, each static scene sits above its text.
 - **System backdrop** (`web/components/system-backdrop.tsx`). A fixed, faint
-  layer behind every page: rows of top skills, segment names and pipeline
+  layer behind the dashboard and CV pages (hidden on the landing): rows of top skills, segment names and pipeline
   terms drifting by, plus a skill-graph constellation with scroll parallax.
   It is decorative (`aria-hidden`, no pointer events) and pauses while the
   tab is hidden.
 - **One dashboard request.** `getDashboard()` memoizes its promise, so the
-  hero, backdrop, walkthrough and dashboard share a single fetch.
+  corpus ledger, backdrop, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
   (`web/app/icon.svg`).
 - **Dashboard and CV.**

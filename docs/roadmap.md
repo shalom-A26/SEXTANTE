@@ -12,7 +12,7 @@
 | 4 · Segmentation | `features.py`, `comparison.py` | K-Means published; Ward/DBSCAN/t-SNE compared |
 | 5 · Supervised | `supervised.py` | Salary-band classifier (SPE bands), CV vs majority baseline |
 | 6 · Graph | `graph.py` | Skill communities/centrality, segment transition routes |
-| 8 · MVP | `sextante_api/`, `web/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps |
+| 8 · MVP | `sextante_api/`, `web/` | Dashboard (3 perspectives + market map), CV matching with links, niches, pivots, gaps; editorial redesign with a WebGL landing (2026-11-19) |
 | Quality | `tests/`, `tests.yml` | 81 tests + ruff in CI; demo run for end-to-end checks |
 
 Verified on a synthetic demo run only (tests, `next build`, manual browser

@@ -56,7 +56,8 @@ export default function CvPage() {
   return (
     <div className="cv">
       <section className="cv-intro">
-        <SplitHeading as="h1" onScroll={false}>¿A qué vacantes se parece tu perfil?</SplitHeading>
+        <span className="pill">Análisis de CV · ESCO</span>
+        <SplitHeading as="h1" className="display" onScroll={false}>¿A qué vacantes se parece tu perfil?</SplitHeading>
         <Reveal delay={0.4}>
           <p className="lead">
             Comparamos tu CV con las vacantes del corpus: texto y habilidades ESCO. Te mostramos las vacantes más afines con su
@@ -177,7 +178,7 @@ function Results({ result }: { result: CvResult }) {
                   {m.missing_skills.slice(0, 4).map((s) => <Badge key={s} variant="outline" className="chip miss">+ {s}</Badge>)}
                 </span>
               </div>
-              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme</a>
+              <a className="apply" href={m.url} target="_blank" rel="noopener noreferrer">Postularme ↪</a>
             </li>
           ))}
         </ul>
