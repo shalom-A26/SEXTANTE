@@ -69,7 +69,8 @@ export function HowItWorks() {
   return (
     <section className="hw" id="como-funciona" ref={ref}>
       <header className="hw-head">
-        <SplitHeading as="h2">Cómo funciona, paso a paso</SplitHeading>
+        <span className="pill">Cómo funciona</span>
+        <SplitHeading as="h2" className="display">Paso <span className="arrow">↪</span> a paso</SplitHeading>
         <p className="lead">
           Lo que ocurre entre una vacante publicada y el resultado que ves: nueve etapas, el algoritmo detrás de cada una y las
           cifras reales del corpus actual.
@@ -98,10 +99,13 @@ export function HowItWorks() {
               <li key={step.key} className={`hw-step${i === active ? " is-active" : ""}`}>
                 <span className="hw-num" aria-hidden="true">{i + 1}</span>
                 <div className="hw-scene-inline" aria-hidden="true"><Visual stepKey={step.key} terms={terms} /></div>
+                <p className="hw-reveal label hw-meta">
+                  Etapa /{String(i + 1).padStart(2, "0")}{metrics.length > 0 && " · datos reales"}
+                </p>
                 <h3 className="hw-reveal">{step.title}</h3>
                 <p className="hw-reveal hw-lead">{step.lead}</p>
                 <div className="hw-reveal hw-inside">
-                  <span className="hw-label">Qué pasa por dentro</span>
+                  <span className="hw-label label">Qué pasa por dentro</span>
                   <ul>{step.inside.map((line) => <li key={line}>{line}</li>)}</ul>
                 </div>
                 <pre className="hw-reveal hw-algo"><code>{step.algorithm}</code></pre>

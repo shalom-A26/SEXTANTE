@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Meter } from "@/components/charts";
-import { ScanCard } from "@/components/hero-cards";
+import { ScanCard } from "@/components/scan-card";
 import { Magnetic, Reveal, SplitHeading } from "@/components/motion";
 import { gsap, MOTION_OK, ScrollTrigger, useGSAP } from "@/components/motion/gsap";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +106,7 @@ export default function CvPage() {
 
       {loading && (
         <div className="cv-loading" role="status">
-          <ScanCard standalone />
+          <ScanCard />
           <p className="muted">Leyendo tu CV y comparándolo con miles de vacantes…</p>
         </div>
       )}
