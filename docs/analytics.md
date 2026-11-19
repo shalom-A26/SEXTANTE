@@ -13,7 +13,8 @@ Use Python 3.12, as configured in the capture workflows, and install the
 analysis and development stack:
 
 ```bash
-.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r backend/requirements/dev.txt
+.venv/bin/python -m pip install --no-deps -e backend
 ```
 
 Download the **ESCO v1.2.1 classification** in Spanish and CSV format from
@@ -26,7 +27,7 @@ Run the complete batch analysis with access to `pxtron/vacantes-colombia`:
 
 ```bash
 export HF_TOKEN=...
-python -m sextante_analysis run --esco-csv /path/to/skills_es.csv
+python -m sextante.analytics run --esco-csv /path/to/skills_es.csv
 ```
 
 The run pins the Hugging Face revision before downloading partitions. Use
@@ -36,7 +37,7 @@ results, or `--embeddings` to additionally compute multilingual sentence
 embeddings. Embeddings require the optional dependencies:
 
 ```bash
-uv pip install -r requirements-embeddings.txt
+uv pip install -r backend/requirements/embeddings.txt
 ```
 
 The embedding model is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
@@ -47,7 +48,7 @@ is the mini demonstration for the course presentation. It includes optional
 small-sample Word2Vec, UMAP, t-SNE, hierarchical, and DBSCAN comparisons.
 It runs on synthetic data by default; set `SEXTANTE_USE_HF=1` to use a
 private-corpus sample. The full dependency set is installed by
-`requirements-dev.txt`.
+`backend/requirements/dev.txt`.
 
 Execute the complete notebook offline; it uses a generated synthetic sample
 unless `SEXTANTE_USE_HF=1` is set:
@@ -134,37 +135,27 @@ This approximation can miss pairs and its output requires human review.
 
 ## Stages 5 and 6
 
-**Salary models.** The target is the midpoint of `salary_min`/`salary_max`,
-kept only inside 500,000–60,000,000 COP/month (outside that range values are
-parsing artifacts). Features are the run's TF-IDF plus one-hot `source`,
-`department`, `contract_type`, `work_modality` and `education_level`.
-`Ridge` is fitted on log salary; `LogisticRegression` predicts the salary
-tertile (bajo/medio/alto). Both report K-fold metrics next to a naive
-baseline (median / majority class) — read them together. Fewer than 30
-labeled postings skip the stage with a reason in the manifest.
-
-**Graph.** Skills are linked when they appear in the same posting; Louvain
-(seed 42) finds communities and PageRank/betweenness rank central skills.
-Segments are linked to their three most similar segments by skill profile;
-shortest paths on `1 − similarity` are the transition routes that the CV
-flow shows as "pivots".
+The salary band model (six SPE-aligned bands, multinomial logistic
+regression against a majority baseline) and the skills graph (co-occurrence,
+Louvain, PageRank, transition routes) are described with their parameters in
+[techniques.md](techniques.md#9-salary-band-model).
 
 ## Demo run and manual validation
 
-`python -m sextante_analysis demo` generates a synthetic corpus (flagged as
+`python -m sextante.analytics demo` generates a synthetic corpus (flagged as
 `synthetic-demo` in the manifest, never uploaded) and runs every stage, so
 the API and web app work in a clean clone.
 
-`python -m sextante_analysis review <run_dir>` writes review CSVs (ESCO
+`python -m sextante.analytics review <run_dir>` writes review CSVs (ESCO
 mentions, duplicate pairs, segment assignments) with an empty `is_correct`
 column; reviewers open the `url` and fill it (`sí`/`no`).
-`python -m sextante_analysis evaluate <run_dir>/review` reports precision
+`python -m sextante.analytics evaluate <run_dir>/review` reports precision
 with a Wilson 95% interval.
 
 ## Current limitations
 
 - ESCO extraction is exact phrase/alias matching, extended with a curated
-  Colombian synonym list (`sextante_analysis/synonyms_es.csv`: synonym →
+  Colombian synonym list (`backend/src/sextante/analytics/synonyms_es.csv`: synonym →
   ESCO preferred label, resolved against the loaded CSV; unknown labels are
   skipped). Count and hash are recorded in the manifest. On a sample
   posting it raised detected skills from 4 to 10; extend the list as manual

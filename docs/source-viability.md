@@ -3,7 +3,7 @@
 > [README](../README.md) · [Architecture](architecture.md)
 
 Which sources can actually feed the pipeline for Colombia, and why the active
-list is what it is. Last full probe: **2026-10-05** (`python -m pipeline probe`,
+list is what it is. Last full probe: **2026-10-05** (`python -m sextante.ingestion probe`,
 `python-jobspy==1.2.0`).
 
 ## Summary
@@ -24,8 +24,8 @@ list is what it is. Last full probe: **2026-10-05** (`python -m pipeline probe`,
 ## Probe method
 
 ```bash
-python -m pipeline probe                     # all known sites, location=Colombia
-python -m pipeline probe --sites linkedin,indeed
+python -m sextante.ingestion probe                     # all known sites, location=Colombia
+python -m sextante.ingestion probe --sites linkedin,indeed
 ```
 
 For each site the probe runs a **general search** (no `search_term`,
@@ -49,7 +49,7 @@ the corpus with non-Colombian postings.
 | zip_recruiter | 0 | — | error: HTTP 403 | ❌ |
 
 Site availability is not permanent (Indeed went 403 → working again). The
-active list lives in `pipeline/sources/jobspy_source.py::ACTIVE_SITES` and
+active list lives in `backend/src/sextante/ingestion/sources/jobspy_source.py::ACTIVE_SITES` and
 should be re-validated with `pipeline probe` whenever captures start
 returning zero rows.
 
@@ -66,7 +66,7 @@ export of **all** registered vacancies through an asynchronous job — the same
 Observed: ~285k vacancies with complete description, education level,
 department, salary band, contract type and experience in months.
 
-Caveats handled in `pipeline/sources/spe.py`:
+Caveats handled in `backend/src/sextante/ingestion/sources/spe.py`:
 
 - The CA chain is incomplete → TLS validation fails systematically; the first
   `SSLError` disables verification for the rest of the run (see
@@ -95,6 +95,6 @@ Caveats handled in `pipeline/sources/spe.py`:
 
 ## Re-probing
 
-Run `python -m pipeline probe` and update this table. If a site changes its
+Run `python -m sextante.ingestion probe` and update this table. If a site changes its
 verdict, update `ACTIVE_SITES` **and** the README's active-sources table in
 the same commit.

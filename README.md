@@ -1,233 +1,200 @@
 <p align="center"><img src="docs/assets/logo.svg" alt="SEXTANTE logo" width="96"></p>
 
-# SEXTANTE
+<h1 align="center">SEXTANTE</h1>
 
-**System for skill extraction, occupational segmentation, salary estimation
-and detection of risk signals in Colombian labor demand.**
+<p align="center">
+  <b>The Colombian job market, read from the text of its job postings.</b><br>
+  Skill extraction · occupational segmentation · salary estimation · CV matching
+</p>
 
-SEXTANTE collects job postings published in Colombia and turns their
-free-text descriptions into structured data. The problem it attacks: real
-job requirements cannot be known from the title alone — *"Analista junior"*
-can mean very different functions and requirements, and the relevant
-information usually lives in the description, written as free text with no
-uniform taxonomy and inconsistent vocabulary. That makes it hard to measure
-which skills the market actually demands, what it pays for them, and how
-occupational profiles relate to each other. From that structured data the
-project identifies skills, analyzes salaries, groups similar occupational
-profiles and detects patterns or anomalies in labor demand.
+---
 
-An academic project of the Universidad Tecnológica de Bolívar (data mining &
-analytics course). The Hugging Face dataset is **private** (ask the team for
-access); the GitHub repository is public so the Actions cron runs are free.
+## What it is
 
-## Project scope
+SEXTANTE collects every job posting it can find in Colombia (the official
+Servicio Público de Empleo export plus LinkedIn, Indeed and Bayt), turns their
+free-text descriptions into structured data and serves the result as a web
+app where:
 
-> **This repository implements the full pipeline end to end**: Stage 1
-> capture (`pipeline/`), batch analytics for Stages 2–6
-> (`sextante_analysis/`, see [`docs/analytics.md`](docs/analytics.md)) and the
-> Stage 8 MVP — FastAPI backend (`sextante_api/`) and Next.js web app
-> (`web/`), see [`docs/mvp.md`](docs/mvp.md). What is still pending (a full
-> run on the real corpus, manual validation, deployment) is tracked in
-> [`docs/roadmap.md`](docs/roadmap.md). The canonical 17-column schema is the
-> contract every later stage consumes.
+- **candidates** upload a CV and see which real vacancies they resemble (with
+  a match %, a link to apply, the skills they lack and roles they could move
+  to);
+- **employers** compare salaries, modalities and the skills asked in their
+  sector;
+- **academic programs** see what the market asks for each education level.
 
-| Stage | Content | Status |
-|---|---|---|
-| **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, 30-min + 12h cadence | ✅ **this repository** |
-| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`sextante_analysis/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
-| 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🟡 baseline (TF-IDF + NMF in batch; optional multilingual embeddings; Word2Vec only in the notebook) |
-| 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | ✅ K-Means published; hierarchical/DBSCAN + t-SNE compared in batch (UMAP notebook-only) |
-| 5 · Supervised models | Salary estimation and classification tasks | ✅ Salary-band classifier over the official SPE bands (postings publish bands, not exact salaries), cross-validated against a majority baseline |
-| 6 · Skills–occupations graph | Communities, centrality, and occupational transition routes | ✅ skill co-occurrence graph (Louvain, PageRank, betweenness) + segment transition routes |
-| 7 · Distributed processing | Apache Spark when the data volume justifies it | ⏸ not needed so far (see roadmap) |
-| **8 · MVP product** | Web application (NextJS + FastAPI) — final course deliverable | ✅ built and tested locally on a demo run; not deployed yet |
+**The problem it solves.** A title like *"Analista junior"* hides very
+different jobs. What a vacancy really asks for is written in its description,
+in free text, with no shared taxonomy. SEXTANTE reads those descriptions at
+scale (hundreds of thousands of postings) and measures which skills are asked,
+how much each kind of work pays and how occupations relate to each other.
 
-### Stage 8 — what the product must do
+An academic project of the Universidad Tecnológica de Bolívar (data mining and
+analytics course).
 
-The final deliverable is a startup-style MVP: a web application with a
-**landing page** and an **analytical dashboard** where findings are
-consulted from three perspectives — **candidates, employers and academic
-programs** — presenting trends, gaps and statistical signals.
+## How it works
 
-- **CV integration** (core, not an extra): a person submits their CV; the
-  product extracts their profile (skills, experience, education) and
-  contrasts it against the vacancy corpus.
-- **Profile–job matching with a similarity percentage**: each person sees
-  the kind of jobs their profile *actually* matches, **ranked by match
-  %** (skills / occupation / seniority).
-- **Every match links back to the original job posting so the person can
-  apply** — the canonical schema's `url` column already carries the source
-  link for this.
-- **Recommendations**: whether the person should pivot to another role, in
-  which niche their profile is well received, and which gaps to close for a
-  target role.
-- **Visualizations and dashboard are first-class requirements**, not a
-  finishing touch: trends, gaps, statistical signals, the graph, and the
-  CV-integration views all rendered in the product.
-
-The CV→vacancy matching and application links build directly on the columns
-Stage 1 already publishes: `url`, `description`, `vacancy_id`.
-
-### Course themes applied
-
-- Exploratory data analysis and variable preparation.
-- Dimensionality reduction (PCA, t-SNE, UMAP).
-- Supervised methods for estimation/classification.
-- Unsupervised clustering (K-Means, hierarchical, DBSCAN).
-- Text mining and NLP: cleaning, normalization, TF-IDF, topic modeling,
-  vector representations.
-- Information extraction from web sources.
-- Network/graph analytics: communities, centrality, path/connection
-  algorithms.
-- Distributed processing with Apache Spark when volume justifies it.
-- Data ethics, privacy, transparency and responsible use as transversal
-  axes.
-
-## Team
-
-| # | Member | Code |
-|---|---|---|
-| 1 | Alejandro Patrón Montero | T00078181 |
-| 2 | Shalom Jhoana Arrieta Marrugo | T00082962 |
-| 3 | Karla Andrea Barraza Torres | T00082880 |
-| 4 | Katlyn Gutiérrez Cardona | T00082259 |
-
-## How it works (Stage 1)
-
-```
-SPE official export ─┐
-LinkedIn  ───────────┼─> canonical schema ─> append-only stores ─> data/spe/ + data/jobspy/ ─> Hugging Face
-Indeed / Bayt ───────┘        (17 cols)        (dedupe, frozen rows)   (weekly / daily Parquet)
+```mermaid
+flowchart LR
+    src["Sources<br/>SPE export · LinkedIn · Indeed · Bayt"] -->|"capture every 30 min / 12 h"| bronze
+    bronze["Bronze<br/>raw postings, append-only<br/>Hugging Face data/"] -->|"daily analytics run"| silver
+    silver["Silver<br/>repaired text, ESCO skills,<br/>duplicates, TF-IDF"] --> gold
+    gold["Gold<br/>segments, salary model,<br/>skills graph, dashboard"] --> api["API<br/>FastAPI"]
+    api --> web["Web app<br/>Next.js"]
 ```
 
-1. **Extract** — `pipeline capture --source spe` downloads the SPE's official
-   CSV export (~285k vacancies, 3 HTTP requests). `pipeline capture --source
-   jobspy` runs a general search (no term, `location=Colombia`) on each
-   active job board.
-2. **Normalize** — every source maps to the canonical schema
-   (`pipeline/schema.py`).
-3. **Append** — stores are append-only with `keep="first"`: a vacancy seen
-   once is frozen forever. `captured_at` is the *first* observation, never
-   overwritten.
-4. **Publish** — rows are partitioned by capture date into
-   `data/spe/week-YYYY-Www.parquet` (ISO week) and
-   `data/jobspy/day-YYYY-MM-DD.parquet` (day), and uploaded to Hugging Face.
-   Closed partitions are immutable, so each run only re-uploads the current
-   week/day file.
+1. **Capture** (`backend/src/sextante/ingestion`): every source is translated
+   into one 17-column schema and appended to stores that never rewrite a
+   posting; they are published on Hugging Face, which is the project's
+   persistent memory.
+2. **Analytics** (`backend/src/sextante/analytics`): text repair, ESCO skill
+   extraction, near-duplicate detection, TF-IDF, topics, occupational
+   segments, a salary-band model and a skills graph.
+3. **Serve** (`backend/src/sextante/api` + `frontend/`): the API loads the
+   latest analytics run and answers the dashboard and CV-matching requests.
 
-**Hugging Face is the persistent memory.** GitHub Actions runners are
-ephemeral: every run starts with `pipeline pull` (restore the published
-corpus), captures, then emits and uploads.
+Each technique is explained, with its real parameters, in
+[docs/techniques.md](docs/techniques.md); the web app's "Cómo funciona"
+section shows the same pipeline running live on example rows.
 
-## Cadence
+## Repository layout
 
-| Workflow | Schedule (UTC) | Source |
-|---|---|---|
-| `.github/workflows/jobspy_capture.yml` | every 30 min at :17 & :47 | JobSpy boards |
-| `.github/workflows/spe_12h.yml` | 04:23 & 16:23 (23:23 & 11:23 Colombia) | SPE official export |
+```
+SEXTANTE/
+├── backend/                     # everything Python: one installable package, `sextante`
+│   ├── src/sextante/
+│   │   ├── core/                # shared contract: 17-column schema, repo paths, .env
+│   │   ├── ingestion/           # capture: SPE + JobSpy → append-only stores → Hugging Face
+│   │   ├── analytics/           # cleaning, ESCO, duplicates, TF-IDF, segments, salary, graph
+│   │   └── api/                 # FastAPI: dashboard aggregates and CV matching
+│   ├── tests/                   # unittest suite
+│   ├── requirements/            # pinned dependencies (base, analysis, api, dev, embeddings, notebooks)
+│   ├── pyproject.toml           # package definition + ruff
+│   └── Dockerfile               # API image (Render)
+├── frontend/                    # Next.js web app: landing, dashboard, CV flow (Vercel)
+├── data/                        # local stores and runs; gitignored, rebuilt from Hugging Face
+├── docs/                        # architecture, data, techniques, analytics, MVP, roadmap
+├── notebooks/                   # course demo notebook
+├── scripts/capture.sh           # manual local capture
+├── .github/workflows/           # scheduled capture, daily analytics, CI
+└── render.yaml                  # Render blueprint for the API
+```
 
-The minutes (:17, :47, :23) are deliberately off-peak: GitHub delays or
-drops scheduled runs at high-load minutes such as :00 and :05.
+**Why no `shared/` folder?** Frontend and backend share no code. They share a
+*contract*: the 17-column schema (`backend/src/sextante/core/schema.py`) and
+the API responses (typed in `frontend/lib/api.ts`). `sextante.core` is that
+shared layer.
 
-The two workflows share a concurrency group so they never upload to Hugging
-Face at the same time.
+## Quick start
 
-## Usage
+All commands run from the repository root. Python ≥ 3.10 with
+[uv](https://docs.astral.sh/uv/), Node ≥ 20.
+
+### See the app with demo data (no tokens needed)
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-
-# Which JobSpy sites work for Colombia right now?
-.venv/bin/python -m pipeline probe
-
-# Full local run (needs HF_TOKEN for pull/upload, see below)
-.venv/bin/python -m pipeline pull    --dataset all
-.venv/bin/python -m pipeline capture --source jobspy --results 100
-.venv/bin/python -m pipeline capture --source spe
-.venv/bin/python -m pipeline emit    --dataset all --upload
+uv venv && uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
+.venv/bin/python -m sextante.analytics demo                # synthetic run → data/analysis/runs/
+.venv/bin/uvicorn sextante.api.main:app --port 8000        # API on http://localhost:8000
+cd frontend && npm install && npm run dev                  # web app on http://localhost:3000
 ```
 
-Or use the manual wrapper: `./scripts/capture.sh [jobspy|spe|all]`.
-
-### Tests
+### Capture postings
 
 ```bash
-python -m unittest discover -s tests
+uv pip install -r backend/requirements/base.txt && uv pip install --no-deps -e backend
+.venv/bin/python -m sextante.ingestion probe                       # which job boards answer for Colombia
+.venv/bin/python -m sextante.ingestion pull    --dataset all       # restore the corpus from Hugging Face
+.venv/bin/python -m sextante.ingestion capture --source jobspy --results 100
+.venv/bin/python -m sextante.ingestion capture --source spe
+.venv/bin/python -m sextante.ingestion emit    --dataset all --upload
 ```
 
-The analysis tests need `requirements-analysis.txt`; CI runs the full suite
-plus `ruff check` on every push and pull request (`.github/workflows/tests.yml`).
+`pull` and `--upload` need an `HF_TOKEN` in a `.env` at the repository root
+(gitignored) or exported; never commit it.
 
-### Analytics and MVP (quick start, no token needed)
+### Run analytics on the real corpus
 
 ```bash
-uv pip install -r requirements-api.txt
-python -m sextante_analysis demo                 # synthetic run → data/analysis/runs/
-uvicorn sextante_api.main:app --port 8000        # API on the newest run
-cd web && npm install && npm run dev             # web app on http://localhost:3000
+.venv/bin/python -m sextante.analytics run --esco-csv skills_es.csv [--upload]
 ```
 
-Real corpus: `python -m sextante_analysis run --esco-csv skills_es.csv [--upload]`
-(see [`docs/analytics.md`](docs/analytics.md)).
+Details (ESCO taxonomy, artifacts, GitHub Actions run) in
+[docs/analytics.md](docs/analytics.md).
 
-### Token
+### Tests and lint
 
-Uploads need an `HF_TOKEN` (write scope). Put it in a `.env` at the repo
-root (gitignored) or export it — the exported value wins. Never commit it.
+```bash
+.venv/bin/python -m unittest discover -s backend/tests
+ruff check backend
+node frontend/scripts/check-guide.ts                       # the web guide's in-browser pipeline
+```
 
-## Active sources
+CI runs the Python suite and ruff on every push and pull request.
 
-| Source | Status | Notes |
+## Automation and deployment
+
+| What | Where | When |
 |---|---|---|
-| **SPE** (`buscadordeempleo.gov.co`) | ✅ | Official mass export, ~285k vacancies/capture, 2021→today |
-| **LinkedIn** (JobSpy) | ✅ | General search for Colombia, full descriptions |
-| **Indeed** (JobSpy) | ✅ | `country_indeed="colombia"` |
-| **Bayt** (JobSpy) | ✅ | Returns Colombia-located rows |
-| Glassdoor | ❌ | Not available for Colombia in JobSpy |
-| Google | ❌ | Returns no data for this location |
-| ZipRecruiter | ❌ | 403 |
-| Naukri / BDJobs | ❌ | Ignore the location filter (India / Bangladesh rows) |
+| JobSpy capture | `.github/workflows/jobspy_capture.yml` | every 30 min (:17, :47 UTC) |
+| SPE capture | `.github/workflows/spe_12h.yml` | 04:23 and 16:23 UTC |
+| Analytics run + API redeploy | `.github/workflows/analytics.yml` | daily 06:00 UTC |
+| Tests + lint | `.github/workflows/tests.yml` | every push / PR |
+| API | Render (`render.yaml` → `backend/Dockerfile`) | on deploy hook / push |
+| Web app | Vercel (root directory `frontend`) | on push |
 
-Full viability study: [`docs/source-viability.md`](docs/source-viability.md).
+The capture workflows share a concurrency group so they never upload to
+Hugging Face at the same time; the off-peak minutes avoid GitHub's delayed
+cron slots.
 
-## Dataset
+## Data
 
-`pxtron/vacantes-colombia` (Hugging Face, **private** — ask the team for
-access; publishing it publicly is a separate decision):
-
-```
-data/
-├── spe/
-│   ├── week-2026-W38.parquet   # immutable once the week closes
-│   └── ...
-└── jobspy/
-    ├── day-2026-10-05.parquet  # rewritten on every capture run while today lasts
-    └── ...
-```
-
-- **Dedupe key**: `vacancy_id` for SPE (`CODIGO_VACANTE`), `url` for JobSpy.
-- **Schema**: 17 canonical columns, English names, Spanish values (the
-  postings are Colombian). No candidate personal data — only public job ads.
-- **Growth**: see `estado.json` in the Actions run summary of each capture.
+The corpus lives in the **private** Hugging Face dataset
+`pxtron/vacantes-colombia` (ask the team for access): weekly SPE and daily
+JobSpy Parquet files with English column names and Spanish values. Sources,
+schema, layers and guarantees are documented in [docs/data.md](docs/data.md);
+which boards work for Colombia and why, in
+[docs/source-viability.md](docs/source-viability.md).
 
 ## Ethics
 
-- Identifiable User-Agent, throttling, `robots.txt` respected.
-- SPE is downloaded through the portal's official export mechanism (no
-  scraping).
-- No block evasion, no proxies, no personal credentials.
-- No personal data of candidates — only publicly posted vacancies.
+- Only public job postings; no personal data of candidates. CVs sent to the
+  app are processed in memory and never stored.
+- SPE data comes from the portal's official export. Job boards are queried
+  with an identifiable User-Agent, throttled, respecting `robots.txt`, with no
+  block evasion, proxies or personal credentials.
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — C4 model (Mermaid), data
-  flows, sequences, data model.
-- [`docs/source-viability.md`](docs/source-viability.md) — source study and
-  probe results.
-- [`docs/analytics.md`](docs/analytics.md) — batch analytics (Stages 2–6):
-  setup, ESCO taxonomy, derived artifacts, models, graph, validation.
-- [`docs/mvp.md`](docs/mvp.md) — Stage 8: API endpoints, CV matching method,
-  web app, running locally and deploying.
-- [`docs/roadmap.md`](docs/roadmap.md) — what is done and what is left.
-- [`AGENTS.md`](AGENTS.md) — working agreements for AI agents (commands,
-  invariants, hard rules).
+| Document | Read it to understand… |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | how the system is built: C4 model, data flow, sequences, design decisions |
+| [docs/data.md](docs/data.md) | the data: sources, 17-column schema, bronze/silver/gold layers, layouts, invariants |
+| [docs/techniques.md](docs/techniques.md) | every technique of the pipeline, its parameters and outputs |
+| [docs/analytics.md](docs/analytics.md) | how to set up and run the batch analytics and what it writes |
+| [docs/mvp.md](docs/mvp.md) | the API endpoints, the CV-matching method and the web app |
+| [docs/source-viability.md](docs/source-viability.md) | which job boards are viable for Colombia |
+| [docs/roadmap.md](docs/roadmap.md) | what is done and what is left |
+| [AGENTS.md](AGENTS.md) | working rules for AI agents in this repository |
+
+## Project stages
+
+| Stage | Status |
+|---|---|
+| 1 · Data capture | ✅ running (SPE + LinkedIn + Indeed + Bayt → Hugging Face) |
+| 2 · Text mining (ESCO skills, duplicates, EDA) | ✅ baseline; manual validation pending |
+| 3 · Representations (TF-IDF, NMF, optional embeddings) | ✅ baseline; Word2Vec in the notebook |
+| 4 · Segmentation (SVD + K-Means; Ward, DBSCAN, t-SNE compared) | ✅ |
+| 5 · Supervised models (salary bands) | ✅ |
+| 6 · Skills–occupations graph | ✅ |
+| 7 · Distributed processing (Spark) | ⏸ not needed at the current volume |
+| 8 · MVP web app (FastAPI + Next.js) | ✅ |
+
+## Team
+
+| Member | Code |
+|---|---|
+| Alejandro Patrón Montero | T00078181 |
+| Shalom Jhoana Arrieta Marrugo | T00082962 |
+| Karla Andrea Barraza Torres | T00082880 |
+| Katlyn Gutiérrez Cardona | T00082259 |
