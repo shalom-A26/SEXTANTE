@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { GlowButton, HookArrow } from "@/components/glow-button";
-import { STEPS } from "@/components/how-it-works/steps";
+import { STEPS } from "@/components/guide/steps";
 import { gsap, MOTION_OK, SplitText, useGSAP } from "@/components/motion/gsap";
 
 const ROW = 56; // px, must match .wwd-track li height
@@ -48,8 +48,10 @@ export function WhatWeDo() {
           <ol className="wwd-track">
             {STEPS.map((s, i) => (
               <li key={s.key} className={i === active ? "on" : Math.abs(i - active) === 1 ? "near" : ""}>
-                <span className="idx"><span className="mono">({String(i + 1).padStart(3, "0")})</span><HookArrow /></span>
-                <strong>{s.title}</strong>
+                <a href="#como-funciona" onClick={() => window.dispatchEvent(new CustomEvent("guide:goto", { detail: i }))}>
+                  <span className="idx"><span className="mono">({String(i + 1).padStart(3, "0")})</span><HookArrow /></span>
+                  <strong>{s.title}</strong>
+                </a>
               </li>
             ))}
           </ol>

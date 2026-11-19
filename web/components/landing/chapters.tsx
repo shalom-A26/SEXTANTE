@@ -62,10 +62,13 @@ export function Chapters() {
         worldState.progress = self.progress * 4;
         show(Math.min(4, Math.floor(self.progress * 5)));
       },
-      // The header turns cream while it floats over the world.
-      onToggle: (self) => { document.documentElement.dataset.header = self.isActive ? "light" : ""; },
     });
-    document.documentElement.dataset.header = window.scrollY < root.offsetHeight - window.innerHeight ? "light" : "";
+    // The header turns cream while it floats over the world (checked on every scroll: robust to jumps).
+    const headerTone = () => {
+      document.documentElement.dataset.header = root.getBoundingClientRect().bottom > 72 ? "light" : "";
+    };
+    headerTone();
+    window.addEventListener("scroll", headerTone, { passive: true });
 
     // First chapter entrance, once the intro has gone.
     const enter = () => {
@@ -77,6 +80,7 @@ export function Chapters() {
 
     return () => {
       st.kill();
+      window.removeEventListener("scroll", headerTone);
       window.removeEventListener("intro-done", enter);
       delete document.documentElement.dataset.header;
       worldState.progress = 0;
