@@ -1,0 +1,27 @@
+# SEXTANTE API (Stage 8). Serves the latest analytics run from Hugging Face.
+#   docker build -t sextante-api backend   (build context: backend/)
+#   docker run -p 8000:8000 -e SEXTANTE_HF_REPO=pxtron/vacantes-colombia \
+#     -e HF_TOKEN=<read-only token> -e SEXTANTE_CORS_ORIGINS=https://<web-domain> sextante-api
+# Without SEXTANTE_HF_REPO it builds a synthetic demo run at startup.
+FROM python:3.12-slim
+
+WORKDIR /app
+# System allocator for Arrow: its default pools keep ~150 MB of freed parquet
+# buffers, which matters on 512 MB hosts (see sextante/api/serving.py).
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000 SEXTANTE_PRELOAD=1 SEXTANTE_ROOT=/app \
+    ARROW_DEFAULT_MEMORY_POOL=system MALLOC_ARENA_MAX=2 \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 HF_HUB_DISABLE_PROGRESS_BARS=1
+
+COPY requirements/ requirements/
+RUN pip install --no-cache-dir -r requirements/api.txt
+
+COPY pyproject.toml ./
+COPY src/ src/
+RUN pip install --no-cache-dir --no-deps .
+
+RUN useradd --create-home --uid 1000 sextante && mkdir -p data/analysis/runs && chown -R sextante /app
+USER sextante
+
+# Download the run in a separate process first: the HF client would otherwise
+# add ~40 MB to the API's peak on a 512 MB host.
+CMD ["sh", "-c", "if [ -n \"$SEXTANTE_HF_REPO\" ] && [ -z \"$SEXTANTE_RUN_DIR\" ]; then SEXTANTE_RUN_DIR=$(python -m sextante.api.data) || exit 1; export SEXTANTE_RUN_DIR; elif [ -z \"$SEXTANTE_RUN_DIR\" ]; then python -m sextante.analytics demo; fi && exec uvicorn sextante.api.main:app --host 0.0.0.0 --port $PORT"]

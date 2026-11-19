@@ -1,0 +1,21 @@
+# Dependencies of the capture pipeline (sextante.ingestion) and of the GitHub Actions
+# workflows. Pinned on purpose: capture runs every 30 min and without this every
+# run would install whatever is newest on PyPI.
+#
+# `pyarrow` in particular has a race at interpreter shutdown (Arrow #34314)
+# that aborted a run with exit code 134 — see pipeline.store.count_rows.
+# `requests` is pinned because pipeline.sources.spe depends on SSLError
+# staying in requests.exceptions across versions.
+#
+# Updating here is a deliberate decision, not a `pip install -U`.
+pandas==3.0.6
+pyarrow==25.0.1
+numpy==2.5.3
+huggingface_hub==2.1.1
+requests==2.34.2
+tenacity==9.1.4
+python-jobspy==1.2.0
+
+# Transitive deps of python-jobspy and pandas: not imported by sextante.ingestion,
+# but needed to resolve the tree. Do not remove.
+beautifulsoup4

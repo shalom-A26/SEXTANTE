@@ -23,9 +23,9 @@ access); the GitHub repository is public so the Actions cron runs are free.
 ## Project scope
 
 > **This repository implements the full pipeline end to end**: Stage 1
-> capture (`pipeline/`), batch analytics for Stages 2–6
-> (`sextante_analysis/`, see [`docs/analytics.md`](docs/analytics.md)) and the
-> Stage 8 MVP — FastAPI backend (`sextante_api/`) and Next.js web app
+> capture (`backend/src/sextante/ingestion/`), batch analytics for Stages 2–6
+> (`backend/src/sextante/analytics/`, see [`docs/analytics.md`](docs/analytics.md)) and the
+> Stage 8 MVP — FastAPI backend (`backend/src/sextante/api/`) and Next.js web app
 > (`web/`), see [`docs/mvp.md`](docs/mvp.md). What is still pending (a full
 > run on the real corpus, manual validation, deployment) is tracked in
 > [`docs/roadmap.md`](docs/roadmap.md). The canonical 17-column schema is the
@@ -34,7 +34,7 @@ access); the GitHub repository is public so the Actions cron runs are free.
 | Stage | Content | Status |
 |---|---|---|
 | **1 · Data extraction** | SPE official export + JobSpy boards (LinkedIn, Indeed, Bayt) → canonical schema → append-only stores → Hugging Face. Ethical scraping, 30-min + 12h cadence | ✅ **this repository** |
-| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`sextante_analysis/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
+| 2 · Text mining | Skill extraction against the **ESCO** open taxonomy; duplicate detection by textual similarity; exploratory data analysis | 🟡 baseline (`backend/src/sextante/analytics/`: EDA, exact ESCO matching, MinHash duplicate candidates); not yet validated |
 | 3 · Text representations | TF-IDF, Word2Vec, transformers for Spanish; topic modeling | 🟡 baseline (TF-IDF + NMF in batch; optional multilingual embeddings; Word2Vec only in the notebook) |
 | 4 · Segmentation | Dimensionality reduction (PCA, t-SNE, UMAP) + unsupervised clustering (K-Means, hierarchical, DBSCAN) of occupational profiles | ✅ K-Means published; hierarchical/DBSCAN + t-SNE compared in batch (UMAP notebook-only) |
 | 5 · Supervised models | Salary estimation and classification tasks | ✅ Salary-band classifier over the official SPE bands (postings publish bands, not exact salaries), cross-validated against a majority baseline |
@@ -105,7 +105,7 @@ Indeed / Bayt ───────┘        (17 cols)        (dedupe, frozen r
    jobspy` runs a general search (no term, `location=Colombia`) on each
    active job board.
 2. **Normalize** — every source maps to the canonical schema
-   (`pipeline/schema.py`).
+   (`backend/src/sextante/core/schema.py`).
 3. **Append** — stores are append-only with `keep="first"`: a vacancy seen
    once is frozen forever. `captured_at` is the *first* observation, never
    overwritten.
@@ -135,16 +135,17 @@ Face at the same time.
 ## Usage
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
+python -m venv .venv && .venv/bin/pip install -r backend/requirements/base.txt
+.venv/bin/pip install --no-deps -e backend      # makes the `sextante` package importable
 
 # Which JobSpy sites work for Colombia right now?
-.venv/bin/python -m pipeline probe
+.venv/bin/python -m sextante.ingestion probe
 
 # Full local run (needs HF_TOKEN for pull/upload, see below)
-.venv/bin/python -m pipeline pull    --dataset all
-.venv/bin/python -m pipeline capture --source jobspy --results 100
-.venv/bin/python -m pipeline capture --source spe
-.venv/bin/python -m pipeline emit    --dataset all --upload
+.venv/bin/python -m sextante.ingestion pull    --dataset all
+.venv/bin/python -m sextante.ingestion capture --source jobspy --results 100
+.venv/bin/python -m sextante.ingestion capture --source spe
+.venv/bin/python -m sextante.ingestion emit    --dataset all --upload
 ```
 
 Or use the manual wrapper: `./scripts/capture.sh [jobspy|spe|all]`.
@@ -152,22 +153,22 @@ Or use the manual wrapper: `./scripts/capture.sh [jobspy|spe|all]`.
 ### Tests
 
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover -s backend/tests
 ```
 
-The analysis tests need `requirements-analysis.txt`; CI runs the full suite
-plus `ruff check` on every push and pull request (`.github/workflows/tests.yml`).
+The analysis tests need `backend/requirements/analysis.txt`; CI runs the full suite
+plus `ruff check backend` on every push and pull request (`.github/workflows/tests.yml`).
 
 ### Analytics and MVP (quick start, no token needed)
 
 ```bash
-uv pip install -r requirements-api.txt
-python -m sextante_analysis demo                 # synthetic run → data/analysis/runs/
-uvicorn sextante_api.main:app --port 8000        # API on the newest run
+uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
+python -m sextante.analytics demo                 # synthetic run → data/analysis/runs/
+uvicorn sextante.api.main:app --port 8000        # API on the newest run
 cd web && npm install && npm run dev             # web app on http://localhost:3000
 ```
 
-Real corpus: `python -m sextante_analysis run --esco-csv skills_es.csv [--upload]`
+Real corpus: `python -m sextante.analytics run --esco-csv skills_es.csv [--upload]`
 (see [`docs/analytics.md`](docs/analytics.md)).
 
 ### Token

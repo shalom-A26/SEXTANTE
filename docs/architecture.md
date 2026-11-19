@@ -31,11 +31,11 @@ SEXTANTE is an ELT pipeline of Colombian job postings:
    ~285k rows/capture) and JobSpy job boards (LinkedIn, Indeed, Bayt) with a
    general search for Colombia.
 2. **Normalize** everything to the **canonical 17-column schema**
-   (`pipeline/schema.py`, `normalize()` / `validate()`).
+   (`backend/src/sextante/core/schema.py`, `normalize()` / `validate()`).
 3. **Save** in two **append-only local stores** (`data/store/spe.parquet`,
    `data/store/jobspy.parquet`). A vacancy already seen is never rewritten;
    `captured_at` stays fixed at the first observation.
-4. **Persistent memory = Hugging Face**: `python -m pipeline pull` recomposes the
+4. **Persistent memory = Hugging Face**: `python -m sextante.ingestion pull` recomposes the
    local stores from the published partitions before each run;
    `pipeline emit` publishes them back. The runner is ephemeral, so without
    this step there is no accumulation.
@@ -151,14 +151,14 @@ Inside the `pipeline` package.
 
 ```mermaid
 flowchart TB
-    cli["pipeline/__main__.py<br/>CLI: probe · pull · capture · emit"]
-    sync["pipeline/sync.py<br/>pull: rebuild stores<br/>+ write published baseline"]
-    emitc["pipeline/emit.py<br/>partition by captured_at<br/>_stable() byte reproducibility<br/>static dataset card"]
-    storec["pipeline/store.py<br/>append-only, dedupe keys<br/>count_rows() footer-only"]
-    env["pipeline/env.py<br/>paths · .env loader<br/>coerce_types()"]
-    schema["pipeline/schema.py<br/>17-column contract<br/>LEGACY_RENAME"]
-    spe["pipeline/sources/spe.py<br/>official export → canonical"]
-    jobspy["pipeline/sources/jobspy_source.py<br/>scrape_jobs → canonical<br/>ACTIVE_SITES"]
+    cli["sextante/ingestion/__main__.py<br/>CLI: probe · pull · capture · emit"]
+    sync["sextante/ingestion/sync.py<br/>pull: rebuild stores<br/>+ write published baseline"]
+    emitc["sextante/ingestion/emit.py<br/>partition by captured_at<br/>_stable() byte reproducibility<br/>static dataset card"]
+    storec["sextante/ingestion/store.py<br/>append-only, dedupe keys<br/>count_rows() footer-only"]
+    env["sextante/core/env.py<br/>paths · .env loader<br/>coerce_types()"]
+    schema["sextante/core/schema.py<br/>17-column contract<br/>LEGACY_RENAME"]
+    spe["sextante/ingestion/sources/spe.py<br/>official export → canonical"]
+    jobspy["sextante/ingestion/sources/jobspy_source.py<br/>scrape_jobs → canonical<br/>ACTIVE_SITES"]
 
     cli --> sync
     cli --> emitc
@@ -220,9 +220,9 @@ The local machine is optional: it runs the same CLI manually
 ```mermaid
 flowchart LR
     hub["HF Hub<br/>data/spe · data/jobspy"]
-    batch["sextante_analysis run<br/>(manual, pinned revision)"]
+    batch["sextante.analytics run<br/>(manual, pinned revision)"]
     derived["HF Hub<br/>derived/runs/&lt;id&gt; · latest.json"]
-    api["sextante_api<br/>FastAPI (in-memory run)"]
+    api["sextante.api<br/>FastAPI (in-memory run)"]
     web["web/<br/>Next.js dashboard + CV"]
     user(("Candidate / employer /<br/>academic program"))
 
@@ -317,10 +317,10 @@ flowchart LR
 
 | Layer | Where it lives | Code | Guarantee |
 |---|---|---|---|
-| Landing | SPE CSV export, JobSpy responses (never persisted) | `pipeline/sources/` | none: transient |
-| Bronze | HF `data/spe/week-*.parquet`, `data/jobspy/day-*.parquet`; local `data/store/<dataset>.parquet` | `pipeline/` (`schema.py`, `store.py`, `emit.py`, `sync.py`) | append-only (`keep="first"`), partitioned by capture date, byte-stable files, 17-column schema; content kept as captured (mojibake, templates, cross-source duplicates) |
-| Silver | HF `derived/runs/<run_id>/`: `postings.parquet` (repaired text, normalized departments, `cluster_id`), `skill_mentions.parquet`, `skill_aliases.parquet`, `duplicate_candidates.parquet`, `tfidf_matrix.npz` + vectorizer, `segment_projection.parquet` | `sextante_analysis/` (`cleaning.py`, `taxonomy.py`, `duplicates.py`, `features.py`) | row-level, cleaned and enriched; built from a revision-pinned corpus (`corpus.py`) |
-| Gold | same run: `dashboard.json`, `segment_stats.json`, `segment_profiles.csv`, `segment_skills.parquet`, `skill_graph_*.parquet`, `segment_transitions.parquet`, `topics.csv`, `supervised_metrics.json`, `salary_model.joblib`, `clustering_comparison.json`, `graph_metrics.json`, `eda.json`; `serving/` bundle; `derived/latest.json` pointer | `sextante_analysis/` (`supervised.py`, `graph.py`, `comparison.py`, `run.py`), `sextante_api/serving.py` | aggregates and models shaped for the API and the dashboard |
+| Landing | SPE CSV export, JobSpy responses (never persisted) | `backend/src/sextante/ingestion/sources/` | none: transient |
+| Bronze | HF `data/spe/week-*.parquet`, `data/jobspy/day-*.parquet`; local `data/store/<dataset>.parquet` | `backend/src/sextante/ingestion/` (`schema.py`, `store.py`, `emit.py`, `sync.py`) | append-only (`keep="first"`), partitioned by capture date, byte-stable files, 17-column schema; content kept as captured (mojibake, templates, cross-source duplicates) |
+| Silver | HF `derived/runs/<run_id>/`: `postings.parquet` (repaired text, normalized departments, `cluster_id`), `skill_mentions.parquet`, `skill_aliases.parquet`, `duplicate_candidates.parquet`, `tfidf_matrix.npz` + vectorizer, `segment_projection.parquet` | `backend/src/sextante/analytics/` (`cleaning.py`, `taxonomy.py`, `duplicates.py`, `features.py`) | row-level, cleaned and enriched; built from a revision-pinned corpus (`corpus.py`) |
+| Gold | same run: `dashboard.json`, `segment_stats.json`, `segment_profiles.csv`, `segment_skills.parquet`, `skill_graph_*.parquet`, `segment_transitions.parquet`, `topics.csv`, `supervised_metrics.json`, `salary_model.joblib`, `clustering_comparison.json`, `graph_metrics.json`, `eda.json`; `serving/` bundle; `derived/latest.json` pointer | `backend/src/sextante/analytics/` (`supervised.py`, `graph.py`, `comparison.py`, `run.py`), `backend/src/sextante/api/serving.py` | aggregates and models shaped for the API and the dashboard |
 
 Caveats, so the analogy is not oversold:
 
@@ -441,7 +441,7 @@ data/
 Plus a static `README.md` (dataset card; identical bytes every run, uploaded
 once) and, locally only, `estado.json` (run state, never uploaded).
 
-The batch analytics (`python -m sextante_analysis run --upload`, run
+The batch analytics (`python -m sextante.analytics run --upload`, run
 manually) writes to a separate prefix of the same dataset and never touches
 `data/`:
 

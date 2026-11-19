@@ -1,0 +1,33 @@
+# SEXTANTE backend: one Python package (src layout). Dependencies stay pinned in
+# requirements/*.txt (what CI and Docker install); this file only makes
+# `sextante` importable (`pip install --no-deps -e backend`) and configures ruff.
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sextante"
+version = "0.1.0"
+description = "Colombian labor-demand mining: capture, analytics and API"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"sextante.analytics" = ["*.csv"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+include = ["src/sextante/analytics/**/*.py", "src/sextante/api/**/*.py", "tests/test_analysis.py", "tests/test_stages.py", "tests/test_api.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sextante"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

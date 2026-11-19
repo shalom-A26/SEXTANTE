@@ -6,15 +6,15 @@
 
 | Part | Path | Role |
 |---|---|---|
-| API | `sextante_api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
+| API | `backend/src/sextante/api/` (FastAPI) | Loads one analytics run into memory; serves dashboard aggregates and scores CVs |
 | Web | `web/` (Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP, three.js) | Landing, dashboard with three perspectives, CV flow |
 
 ## Running locally
 
 ```bash
-uv pip install -r requirements-api.txt
-python -m sextante_analysis demo          # or a real run, or SEXTANTE_HF_REPO
-uvicorn sextante_api.main:app --port 8000
+uv pip install -r backend/requirements/api.txt && uv pip install --no-deps -e backend
+python -m sextante.analytics demo          # or a real run, or SEXTANTE_HF_REPO
+uvicorn sextante.api.main:app --port 8000
 cd web && cp .env.example .env.local && npm install && npm run dev
 ```
 
@@ -139,8 +139,8 @@ run.
 
 Free hosting has ~512 MB of RAM; the API over the full run needs ~2.5 GB.
 Each analytics run therefore also writes a **serving bundle**
-(`derived/runs/<run_id>/serving/`, ~32 MB, built by `sextante_api/serving.py`;
-for an existing run: `python -m sextante_api.serving <run_dir>`):
+(`derived/runs/<run_id>/serving/`, ~32 MB, built by `backend/src/sextante/api/serving.py`;
+for an existing run: `python -m sextante.api.serving <run_dir>`):
 
 - the dashboard payload precomputed over the whole corpus (all figures stay
   corpus-wide), segment names/sizes/modal salary bands and centroids;
@@ -150,7 +150,7 @@ for an existing run: `python -m sextante_api.serving <run_dir>`):
 
 With `SEXTANTE_SERVING=1` the API downloads only that bundle: ~390 MB peak
 RSS, CV match in ~30 ms. Arrow uses the system allocator
-(`ARROW_DEFAULT_MEMORY_POOL=system`, set in the `Dockerfile`); its default
+(`ARROW_DEFAULT_MEMORY_POOL=system`, set in `backend/Dockerfile`); its default
 pools keep ~150 MB of freed buffers.
 
 - **API: Render** (free web service, `render.yaml` blueprint): New →

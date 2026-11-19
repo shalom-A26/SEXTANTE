@@ -36,11 +36,13 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Runs from a checkout without installing the package: put backend/src on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend" / "src"))
 
-from pipeline import emit as emit_mod  # noqa: E402
-from pipeline import env, store  # noqa: E402
-from pipeline.schema import COLUMNS, LEGACY_RENAME  # noqa: E402
+from sextante.core import env  # noqa: E402
+from sextante.core.schema import COLUMNS, LEGACY_RENAME  # noqa: E402
+from sextante.ingestion import emit as emit_mod  # noqa: E402
+from sextante.ingestion import store  # noqa: E402
 
 LEGACY_ROOT_PREFIX = "data/semana-"
 LEGACY_STORE_PREFIX = "store/"

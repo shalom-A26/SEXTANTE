@@ -22,19 +22,19 @@ case "$WHAT" in
 esac
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] pulling published corpus ($WHAT)..."
-"$PY" -m pipeline pull --dataset "$WHAT"
+"$PY" -m sextante.ingestion pull --dataset "$WHAT"
 
 if [ "$WHAT" != "spe" ]; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] capturing jobspy boards..."
-  "$PY" -m pipeline capture --source jobspy --results 100
+  "$PY" -m sextante.ingestion capture --source jobspy --results 100
 fi
 
 if [ "$WHAT" != "jobspy" ]; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] capturing SPE export..."
-  "$PY" -m pipeline capture --source spe
+  "$PY" -m sextante.ingestion capture --source spe
 fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] emitting and uploading ($WHAT)..."
-"$PY" -m pipeline emit --dataset "$WHAT" --upload
+"$PY" -m sextante.ingestion emit --dataset "$WHAT" --upload
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] done."
