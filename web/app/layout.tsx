@@ -5,6 +5,7 @@ import Link from "next/link";
 import "./globals.css";
 import "./design.css";
 import { GlowButton } from "@/components/glow-button";
+import { ChartBackdrop } from "@/components/shell/chart-backdrop";
 import { FlickerLink } from "@/components/shell/flicker-link";
 import { Orb } from "@/components/shell/orb";
 import { SoundToggle } from "@/components/shell/sound-toggle";
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <TooltipProvider delayDuration={120}>
+          <ChartBackdrop />
           <header className="topbar">
             <Link href="/" className="brand" aria-label="SEXTANTE, inicio"><Wordmark /></Link>
             <nav className="nav" aria-label="Principal">
