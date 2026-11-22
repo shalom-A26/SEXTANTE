@@ -39,7 +39,7 @@ export type Dashboard = {
     education: Count[];
   };
   segments: Segment[];
-  top_skills: { skill: string; postings: number; share: number; community: number }[];
+  top_skills: { esco_uri: string; skill: string; postings: number; share: number; community: number }[];
   education_skills: { education: string; postings: number; skills: { skill: string; count: number }[] }[];
   salaries: {
     overall: SalaryStats;
@@ -56,10 +56,11 @@ export type Dashboard = {
   };
   graph: {
     metrics: Record<string, number | null>;
-    nodes: { esco_uri: string; skill_label: string; postings: number; pagerank: number; community: number }[];
+    nodes: { esco_uri: string; skill_label: string; postings: number; pagerank: number; betweenness: number; community: number }[];
     edges: { source: string; target: string; weight: number }[];
     segment_links: { from: number; to: number; similarity: number }[];
   };
+  topics: { topic_id: number; terms: string }[];
   projection: { component_1: number; component_2: number; cluster_id: number }[];
   clustering_comparison: {
     methods?: Record<string, { clusters: number; silhouette_cosine: number | null; noise_share: number }>;
@@ -110,11 +111,30 @@ export type CvResult = {
 // dashboard all read the same ~0.5 MB payload. A failed request is not cached.
 let dashboardRequest: Promise<Dashboard> | null = null;
 
+/** Failed request: `status` is set for HTTP errors, absent when the API was unreachable. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** User-facing (Spanish) explanation that tells a connection failure from an HTTP error. */
+export function apiErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status !== undefined) {
+    return `El API respondió con un error (HTTP ${error.status}). Intenta de nuevo en un momento.`;
+  }
+  return `No se pudo conectar con el API en ${API_URL}. ¿Está corriendo? Si está en el plan gratis, puede tardar un minuto en despertar.`;
+}
+
 export function getDashboard(): Promise<Dashboard> {
-  dashboardRequest ??= fetch(`${API_URL}/api/dashboard`).then((response) => {
-    if (!response.ok) throw new Error(`API ${response.status}`);
-    return response.json() as Promise<Dashboard>;
-  }).catch((error: Error) => {
+  dashboardRequest ??= fetch(`${API_URL}/api/dashboard`).then(
+    (response) => {
+      if (!response.ok) throw new ApiError(`API ${response.status}`, response.status);
+      return response.json() as Promise<Dashboard>;
+    },
+    () => { throw new ApiError("API unreachable"); },
+  ).catch((error: Error) => {
     dashboardRequest = null;
     throw error;
   });
@@ -135,5 +155,24 @@ export const cop = (value: number | null | undefined) =>
 
 export const pct = (value: number) => `${(100 * value).toFixed(0)}%`;
 
-/** Share of banded postings paying more than $2M COP (bands above "$1,5M – $2M"). */
-export const shareAbove2M = (s: SalaryStats) => s.bands.slice(2).reduce((sum, b) => sum + b.share, 0);
+/** Lower bound in millions of COP parsed from a band label ("Hasta $1,5M" -> 0, "$2M – $3M" -> 2); null if unreadable. */
+function bandLowerBound(label: string): number | null {
+  if (/^hasta/i.test(label)) return 0;
+  const m = /\$(\d+(?:,\d+)?)\s*M/.exec(label);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
+
+/**
+ * Share of banded postings paying $2M COP or more, derived from the band labels themselves.
+ * Returns null when there are no bands or any label cannot be read, so callers never show a guessed number.
+ */
+export function shareAbove2M(s: SalaryStats): number | null {
+  if (!s.bands.length) return null;
+  let total = 0;
+  for (const b of s.bands) {
+    const lower = bandLowerBound(b.band);
+    if (lower === null) return null;
+    if (lower >= 2) total += b.share;
+  }
+  return total;
+}

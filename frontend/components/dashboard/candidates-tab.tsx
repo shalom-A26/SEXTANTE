@@ -1,0 +1,49 @@
+import { BarList } from "@/components/charts";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { pct, type Dashboard } from "@/lib/api";
+import { shareOfTotalBars, skillBars } from "@/lib/dashboard";
+import { Panel } from "./panel";
+
+export function CandidatesTab({ data }: { data: Dashboard }) {
+  return (
+    <div className="grid-2">
+      <Panel title="Habilidades más pedidas" note="% de vacantes que la mencionan">
+        <BarList data={skillBars(data.top_skills)} unit="percent" />
+      </Panel>
+      <Panel title="Segmentos ocupacionales" note="Rango salarial más común (con su mediana) y habilidades distintivas">
+        <Accordion type="single" collapsible className="segment-list">
+          {data.segments.map((s) => (
+            <AccordionItem key={s.id} value={String(s.id)}>
+              <AccordionTrigger className="segment-trigger">
+                <strong>{s.name}</strong>
+                <span>
+                  {s.postings.toLocaleString("es-CO")} vacantes · {s.salary.mode
+                    ? `${s.salary.mode}${s.salary.median ? ` (mediana ${s.salary.median})` : ""}`
+                    : "sin salario publicado"}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <p className="chips">
+                  {s.top_skills.map((k) => <Badge key={k.skill} variant="outline" className="chip">{k.skill} · {pct(k.share)}</Badge>)}
+                </p>
+                <div className="segment-mix">
+                  {([["Modalidad", s.modality], ["Nivel educativo", s.education], ["Ciudades", s.cities]] as const).map(([title, items]) => (
+                    items?.length ? (
+                      <div key={title}>
+                        <h4>{title}</h4>
+                        <BarList data={shareOfTotalBars(items, s.postings)} unit="percent" />
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+                <p className="muted">% de las {s.postings.toLocaleString("es-CO")} vacantes del segmento; solo las categorías más frecuentes, «Sin dato» incluido.</p>
+                <p className="muted">Términos: {s.terms.join(", ")}</p>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </Panel>
+    </div>
+  );
+}
