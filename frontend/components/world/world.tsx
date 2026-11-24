@@ -310,6 +310,8 @@ export default function World() {
       camera.aspect = w / h;
       camera.fov = w / h < 1 ? 70 : 55;
       camera.updateProjectionMatrix();
+      // setSize wipes the drawing buffer; redraw now so no blank frame gets painted.
+      renderer.render(scene, camera);
     };
     resize();
     const ro = new ResizeObserver(resize);
