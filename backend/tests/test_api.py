@@ -37,6 +37,53 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(body["top_skills"])
         self.assertIn("classification", body["salaries"]["models"])
 
+    def test_dashboard_graph_rankings_communities_and_metrics(self):
+        graph = self.client.get("/api/dashboard").json()["graph"]
+        node = graph["nodes"][0]
+        self.assertIsInstance(node["degree"], int)
+        self.assertIsInstance(node["weighted_degree"], float)
+
+        transversal = graph["rankings"]["transversal"]
+        self.assertTrue(0 < len(transversal) <= 10)
+        self.assertEqual(set(transversal[0]), {"esco_uri", "skill_label", "postings", "degree",
+                                               "weighted_degree", "community"})
+        degrees = [(r["degree"], r["weighted_degree"]) for r in transversal]
+        self.assertEqual(degrees, sorted(degrees, reverse=True))
+        bridges = graph["rankings"]["bridges"]
+        self.assertLessEqual(len(bridges), 10)
+        for row in bridges:
+            self.assertEqual(set(row), {"esco_uri", "skill_label", "postings", "degree",
+                                        "betweenness", "community"})
+        scores = [r["betweenness"] for r in bridges]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+        communities = graph["communities"]
+        self.assertTrue(communities)
+        self.assertNotIn(-1, [c["community"] for c in communities])
+        sizes = [c["size"] for c in communities]
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+        self.assertTrue(all(1 <= len(c["top_skills"]) <= 3 for c in communities))
+
+        metrics = graph["metrics"]
+        nodes, edges = metrics["skill_nodes"], metrics["skill_edges"]
+        self.assertAlmostEqual(metrics["density"], 2 * edges / (nodes * (nodes - 1)))
+        self.assertAlmostEqual(metrics["average_degree"], 2 * edges / nodes)
+        self.assertTrue(0.0 <= metrics["average_clustering"] <= 1.0)
+
+    def test_graph_without_edges_has_empty_lists_and_null_metrics(self):
+        from unittest import mock
+
+        import pandas as pd
+
+        from sextante.api.insights import _graph_communities, _graph_metrics, _graph_rankings
+
+        run = mock.Mock(graph_metrics={}, skill_nodes=pd.DataFrame(), skill_edges=pd.DataFrame())
+        metrics = _graph_metrics(run)
+        self.assertEqual((metrics["density"], metrics["average_degree"],
+                          metrics["average_clustering"]), (None, None, None))
+        self.assertEqual(_graph_rankings(run.skill_nodes), {"transversal": [], "bridges": []})
+        self.assertEqual(_graph_communities(run.skill_nodes), [])
+
     def test_cv_text_match_returns_links_and_advice(self):
         body = self.client.post("/api/cv/match", data={"text": CV, "limit": "5"}).json()
         self.assertIn("contabilidad", body["cv_skills"])
@@ -138,7 +185,12 @@ class ServingBundleTests(unittest.TestCase):
             full = TestClient(create_app(run_dir)).get("/api/dashboard").json()
             client = TestClient(create_app(build_bundle(run_dir, rows=60)))
             self.assertEqual(client.get("/api/health").json()["postings"], 60)
-            self.assertEqual(client.get("/api/dashboard").json()["overview"], full["overview"])
+            served = client.get("/api/dashboard").json()
+            self.assertEqual(served["overview"], full["overview"])
+            # The bundle has no skill edges: the graph block (clustering included)
+            # comes from the dashboard precomputed over the full run.
+            self.assertEqual(served["graph"], full["graph"])
+            self.assertIsNotNone(served["graph"]["metrics"]["average_clustering"])
             body = client.post("/api/cv/match", data={"text": CV, "limit": "5"}).json()
             self.assertIn("contabilidad", body["cv_skills"])
             self.assertTrue(body["matches"])

@@ -199,6 +199,12 @@ skill inside it); segments link to their most similar segments by profile
 cosine, and Dijkstra over `1 − similarity` gives the transition routes the CV
 flow shows as pivots.
 
+The dashboard (`api/insights.py`) summarizes the whole skill graph (`N` nodes,
+`E` edges): density `2E / (N(N − 1))`, average degree `2E / N` and unweighted
+average clustering (networkx); the 10 skills with most neighbours (degree,
+ties by weighted degree) as *transversal*, the 10 with highest betweenness as
+*bridges*, and each community's size and 3 most demanded skills.
+
 **Parameters.** Top 400 skills as nodes, edges with ≥ 2 shared postings,
 3 neighbour segments, Louvain `seed=42`.
 

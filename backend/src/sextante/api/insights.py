@@ -6,6 +6,7 @@ import re
 from collections import Counter
 from typing import Any
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 
@@ -94,6 +95,61 @@ def _segment_top_skills(run: RunData, segment: int, top: int = 6) -> list[dict[s
 
 # Departments need this many banded postings before their distribution is shown.
 MIN_DEPARTMENT_SALARIES = 30
+GRAPH_RANKING_SIZE = 10
+
+
+def _graph_metrics(run: RunData) -> dict[str, Any]:
+    """Run graph metrics plus density, average degree and average clustering.
+
+    All three describe the full skill graph (every node and edge of the run),
+    so they are null when the loaded run has no skill edges. The serving bundle
+    ships no edges, but its dashboard is precomputed over the full run, so it
+    never reaches this. Called once per run: the dashboard is cached.
+    """
+    metrics = dict(run.graph_metrics)
+    nodes = int(metrics.get("skill_nodes") or len(run.skill_nodes))
+    edges = int(metrics.get("skill_edges") or len(run.skill_edges))
+    density = average_degree = average_clustering = None
+    if nodes > 1 and edges and not run.skill_edges.empty:
+        density = 2 * edges / (nodes * (nodes - 1))
+        average_degree = 2 * edges / nodes
+        graph = nx.Graph()
+        graph.add_nodes_from(run.skill_nodes.get("esco_uri", []))
+        graph.add_edges_from(run.skill_edges[["source", "target"]].itertuples(index=False))
+        average_clustering = float(nx.average_clustering(graph, weight=None))
+    metrics.update(density=density, average_degree=average_degree,
+                   average_clustering=average_clustering)
+    return metrics
+
+
+def _graph_rankings(nodes: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    """Most connected skills (transversal) and highest betweenness (bridges)."""
+    if nodes.empty:
+        return {"transversal": [], "bridges": []}
+    transversal = nodes[nodes["degree"] > 0].sort_values(
+        ["degree", "weighted_degree"], ascending=False).head(GRAPH_RANKING_SIZE)
+    bridges = nodes[nodes["betweenness"] > 0].sort_values(
+        "betweenness", ascending=False).head(GRAPH_RANKING_SIZE)
+    return {
+        "transversal": _records(transversal[["esco_uri", "skill_label", "postings", "degree",
+                                             "weighted_degree", "community"]]),
+        "bridges": _records(bridges[["esco_uri", "skill_label", "postings", "degree",
+                                     "betweenness", "community"]]),
+    }
+
+
+def _graph_communities(nodes: pd.DataFrame) -> list[dict[str, Any]]:
+    """Louvain communities by size, each with its three most demanded skills."""
+    if nodes.empty:
+        return []
+    grouped = nodes[nodes["community"] != -1].groupby("community")
+    communities = [
+        {"community": int(community), "size": int(len(members)),
+         "top_skills": [str(label) for label in
+                        members.sort_values("postings", ascending=False)["skill_label"].head(3)]}
+        for community, members in grouped
+    ]
+    return sorted(communities, key=lambda item: (-item["size"], item["community"]))
 
 
 def dashboard(run: RunData) -> dict[str, Any]:
@@ -187,10 +243,13 @@ def dashboard(run: RunData) -> dict[str, Any]:
             "models": run.supervised,
         },
         "graph": {
-            "metrics": run.graph_metrics,
+            "metrics": _graph_metrics(run),
             "nodes": _records(nodes[["esco_uri", "skill_label", "postings", "pagerank",
-                                     "betweenness", "community"]]) if not nodes.empty else [],
+                                     "betweenness", "community", "degree",
+                                     "weighted_degree"]]) if not nodes.empty else [],
             "edges": _records(edges) if not edges.empty else [],
+            "rankings": _graph_rankings(run.skill_nodes),
+            "communities": _graph_communities(run.skill_nodes),
             "segment_links": [
                 {"from": int(r.from_segment), "to": int(r.to_segment),
                  "similarity": float(r.direct_similarity)}
