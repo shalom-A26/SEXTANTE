@@ -21,6 +21,9 @@ export type Segment = {
   cities: Count[];
 };
 
+export type RankedSkill = { esco_uri: string; skill_label: string; postings: number; degree: number; community: number };
+export type GraphCommunity = { community: number; size: number; top_skills: string[] };
+
 export type Dashboard = {
   run: { run_id: string; created_at_utc: string; corpus: string; revision: string; synthetic: boolean };
   overview: {
@@ -55,10 +58,21 @@ export type Dashboard = {
     };
   };
   graph: {
-    metrics: Record<string, number | null>;
-    nodes: { esco_uri: string; skill_label: string; postings: number; pagerank: number; betweenness: number; community: number }[];
+    // skill_nodes, skill_edges, skill_communities, skill_modularity, segment_nodes, segment_edges;
+    // newer runs add density, average_degree, average_clustering. Any key may be missing.
+    metrics: Partial<Record<string, number | null>>;
+    nodes: {
+      esco_uri: string; skill_label: string; postings: number; pagerank: number; betweenness: number; community: number;
+      degree?: number; weighted_degree?: number;
+    }[];
     edges: { source: string; target: string; weight: number }[];
     segment_links: { from: number; to: number; similarity: number }[];
+    // Top 10 each over the full skills graph; absent in older runs.
+    rankings?: {
+      transversal?: (RankedSkill & { weighted_degree: number })[];
+      bridges?: (RankedSkill & { betweenness: number })[];
+    };
+    communities?: GraphCommunity[];
   };
   topics: { topic_id: number; terms: string }[];
   projection: { component_1: number; component_2: number; cluster_id: number }[];

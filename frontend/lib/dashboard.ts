@@ -68,26 +68,60 @@ export const programSkillBars = (e: Dashboard["education_skills"][number]): Bar[
     hint: `n=${n(s.count)}`,
   }));
 
-export function neighbourBars(links: Dashboard["graph"]["segment_links"], names: Record<number, string>, limit = 12): Bar[] {
-  return [...links].sort((a, b) => b.similarity - a.similarity).slice(0, limit).map((l) => ({
-    label: `${segmentName(names, l.from)} ↔ ${segmentName(names, l.to)}`,
-    value: l.similarity,
+/** Segments most similar to `id` (links are undirected and stored once, from < to), best first. */
+export function nearbySegments(links: Dashboard["graph"]["segment_links"], id: number, names: Record<number, string>, limit = 3) {
+  return links
+    .flatMap((l) => (l.from === id ? [{ id: l.to, similarity: l.similarity }]
+      : l.to === id ? [{ id: l.from, similarity: l.similarity }] : []))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit)
+    .map((l) => ({ name: segmentName(names, l.id), similarity: l.similarity }));
+}
+
+type Graph = Dashboard["graph"];
+
+/** Skills connected to the most other skills; falls back to the drawn nodes on runs without `rankings`. */
+export function transversalBars(graph: Graph, limit = 10): Bar[] {
+  const ranked: { skill_label: string; postings: number; degree: number }[] = graph.rankings?.transversal?.length
+    ? graph.rankings.transversal
+    : graph.nodes.flatMap((s) => (s.degree != null ? [{ ...s, degree: s.degree }] : []))
+      .sort((a, b) => b.degree - a.degree);
+  return ranked.slice(0, limit).map((s) => ({
+    label: s.skill_label,
+    value: s.degree,
+    hint: `aparece junto a ${n(s.degree)} habilidades distintas · n=${n(s.postings)} vacantes`,
   }));
+}
+
+/** Skills that link different areas of the graph (betweenness); drawn relative to the top one, no raw decimals. */
+export function bridgeBars(graph: Graph, limit = 10): Bar[] {
+  const ranked: { skill_label: string; postings: number; betweenness: number }[] = graph.rankings?.bridges?.length
+    ? graph.rankings.bridges
+    : [...graph.nodes].filter((s) => s.betweenness > 0).sort((a, b) => b.betweenness - a.betweenness);
+  return ranked.slice(0, limit).map((s) => ({
+    label: s.skill_label,
+    value: s.betweenness,
+    hint: `une grupos de habilidades distintos · n=${n(s.postings)} vacantes`,
+  }));
+}
+
+/** One legend entry per community, named by its top skills; derived from the nodes when the API omits them. */
+export function communityLegend(nodes: { skill_label: string; postings: number; community: number }[],
+  communities?: Graph["communities"], skills = 3) {
+  const present = new Set(nodes.map((s) => s.community));
+  const given = (communities ?? []).filter((c) => present.has(c.community) && c.top_skills.length);
+  if (given.length) {
+    return given.sort((a, b) => b.size - a.size).map((c) => ({ ...c, top_skills: c.top_skills.slice(0, skills) }));
+  }
+  return [...present].map((community) => {
+    const members = nodes.filter((s) => s.community === community).sort((a, b) => b.postings - a.postings);
+    return { community, size: members.length, top_skills: members.slice(0, skills).map((s) => s.skill_label) };
+  }).sort((a, b) => b.size - a.size);
 }
 
 /** Shares of an explicit total (e.g. a segment's postings); lists cut to the top N add up to less than 100%. */
 export function shareOfTotalBars(items: { label: string; count: number }[], total: number): Bar[] {
   return items.map((c) => ({ label: c.label, value: total ? Math.min(1, c.count / total) : 0, hint: `n=${n(c.count)}` }));
-}
-
-/** Postings with / without a published salary band; the gap is shown, not hidden. */
-export function salaryCoverageBars(o: Dashboard["overview"]): Bar[] {
-  const without = Math.max(0, o.postings - o.with_salary);
-  const share = (count: number) => (o.postings ? count / o.postings : 0);
-  return [
-    { label: "Con rango salarial publicado", value: share(o.with_salary), hint: `n=${n(o.with_salary)} de ${n(o.postings)}` },
-    { label: "Sin rango publicado", value: share(without), hint: `n=${n(without)} de ${n(o.postings)}` },
-  ];
 }
 
 /** Topic terms as chips; the API sends them joined with " | ". */

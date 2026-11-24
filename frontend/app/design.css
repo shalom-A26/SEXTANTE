@@ -97,6 +97,9 @@ main { min-height: 70vh; }
 /* ---------- Intro gate ---------- */
 .intro { position: fixed; inset: 0; z-index: 100; display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 48px 24px;
   background: var(--paper); color: var(--wine); }
+/* Set by the inline <head> script in app/layout.tsx before first paint on "/" when the gate will open;
+   Intro removes it once the gate is mounted. Same background as .intro, one layer below it. */
+html[data-intro-cover] body::before { content: ""; position: fixed; inset: 0; z-index: 99; background: var(--paper); }
 .intro-center { align-self: center; display: grid; justify-items: center; gap: 18px; text-align: center; }
 .intro .wordmark { font-size: 3rem; }
 .intro-progress { width: 180px; height: 1px; background: rgba(46, 18, 17, 0.15); overflow: hidden; }
@@ -600,5 +603,17 @@ html:not([data-header="light"]) .topbar { background: linear-gradient(180deg, rg
 .segment-mix { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 22px; margin: 10px 0 4px; }
 .segment-mix > div { min-width: 0; }
 .segment-mix h4 { margin: 0 0 6px; font-size: 0.82rem; font-weight: 600; color: var(--sx-muted); }
+.nearby { margin: 4px 0 10px; font-size: 0.9rem; }
+.rank-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px 32px; margin-top: 10px; }
+.rank-pair > div { min-width: 0; }
+.rank-pair h4, .tech-block h4 { margin: 0 0 2px; font-size: 0.92rem; font-weight: 600; }
+.tech-block { margin-top: 18px; }
+.tech-block:first-child { margin-top: 0; }
+/* Relative bars carry no number: label + bar only. */
+.barlist-bare li { grid-template-columns: minmax(120px, 38%) 1fr; }
+.graph-legend { list-style: none; padding: 0; }
+.graph-legend li { display: flex; align-items: baseline; gap: 6px; font-size: 0.82rem; color: var(--sx-muted); }
+.graph-legend i { flex: none; transform: translateY(1px); }
+.graph-legend small { color: var(--faint); }
 .topic-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .topic-list .chips { margin: 4px 0 0; }

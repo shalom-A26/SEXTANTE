@@ -5,8 +5,8 @@ import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CountUp } from "@/components/motion";
 import { gsap, MOTION_OK, useGSAP } from "@/components/motion/gsap";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { pct } from "@/lib/api";
-import { extent, type Bar } from "@/lib/dashboard";
+import { pct, type GraphCommunity } from "@/lib/api";
+import { communityLegend, extent, type Bar } from "@/lib/dashboard";
 
 /**
  * Runs `animate` once the element scrolls into view (skipped with reduced motion).
@@ -45,10 +45,11 @@ export function colorFor(index: number): string {
 /**
  * `percent`: values are 0..1 shares, drawn on a fixed 0-100% scale (comparable across panels).
  * `count`: values are counts, drawn relative to the largest row.
+ * `relative`: drawn relative to the largest row with no number (for scores whose raw value means little to readers).
  */
-export function BarList({ data, unit = "count" }: { data: Bar[]; unit?: "percent" | "count" }) {
-  const format = unit === "percent" ? pct : (v: number) => v.toLocaleString("es-CO");
-  const top = unit === "percent" ? 1 : Math.max(extent(data.map((d) => d.value))?.[1] ?? 0, 1);
+export function BarList({ data, unit = "count" }: { data: Bar[]; unit?: "percent" | "count" | "relative" }) {
+  const format = unit === "percent" ? pct : unit === "relative" ? () => "" : (v: number) => v.toLocaleString("es-CO");
+  const top = unit === "percent" ? 1 : unit === "relative" ? Math.max(extent(data.map((d) => d.value))?.[1] ?? 0, 1e-12) : Math.max(extent(data.map((d) => d.value))?.[1] ?? 0, 1);
   // Stable signature: a fresh array with the same rows must not replay the entrance animation.
   const signature = data.map((d) => `${d.label}:${d.value}`).join("|");
   const ref = useEntrance<HTMLUListElement>((q, root) => {
@@ -57,23 +58,23 @@ export function BarList({ data, unit = "count" }: { data: Bar[]; unit?: "percent
       .from(q(".barlist-fill"), { scaleX: 0, transformOrigin: "0% 50%", duration: 1.4, stagger: 0.05 }, 0.1);
   }, [signature]);
   return (
-    <ul className="barlist" ref={ref}>
-      {data.map((d) => <BarRow key={d.label} bar={d} top={top} format={format} />)}
+    <ul className={unit === "relative" ? "barlist barlist-bare" : "barlist"} ref={ref}>
+      {data.map((d) => <BarRow key={d.label} bar={d} top={top} format={unit === "relative" ? null : format} />)}
     </ul>
   );
 }
 
-function BarRow({ bar: d, top, format }: { bar: Bar; top: number; format: (v: number) => string }) {
+function BarRow({ bar: d, top, format }: { bar: Bar; top: number; format: ((v: number) => string) | null }) {
   const [open, setOpen] = useState(false);
   const row = (
     <li tabIndex={d.hint ? 0 : undefined} className={d.hint ? "barlist-row has-hint" : "barlist-row"}
-      aria-label={d.hint ? `${d.label}: ${format(d.value)}. ${d.hint}` : undefined}
+      aria-label={d.hint ? `${d.label}${format ? `: ${format(d.value)}` : ""}. ${d.hint}` : undefined}
       onClick={d.hint ? () => setOpen((o) => !o) : undefined}>
       <span className="barlist-label">{d.label}</span>
       <span className="barlist-track">
         <span className="barlist-fill" style={{ width: `${Math.min(100, (100 * d.value) / top)}%` }} />
       </span>
-      <span className="barlist-value"><CountUp value={d.value} format={format} duration={1.4} /></span>
+      {format && <span className="barlist-value"><CountUp value={d.value} format={format} duration={1.4} /></span>}
     </li>
   );
   if (!d.hint) return row;
@@ -142,7 +143,30 @@ export function Scatter({ points, names }: {
 
 type GraphNode = { esco_uri: string; skill_label: string; postings: number; pagerank: number; betweenness?: number; community: number };
 
-export function SkillGraph({ nodes, edges }: {
+export function SkillGraph({ nodes, edges, communities }: {
+  nodes: GraphNode[];
+  edges: { source: string; target: string; weight: number }[];
+  communities?: GraphCommunity[];
+}) {
+  const legend = useMemo(() => communityLegend(nodes, communities), [nodes, communities]);
+  return (
+    <div>
+      <SkillGraphCanvas nodes={nodes} edges={edges} />
+      {legend.length > 0 && (
+        <ul className="legend graph-legend" aria-label="Comunidades del grafo, nombradas por sus habilidades principales">
+          {legend.map((c) => (
+            <li key={c.community}>
+              <i style={{ background: colorFor(c.community) }} />
+              <span>{c.top_skills.join(", ")} <small>({c.size.toLocaleString("es-CO")} habilidades)</small></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SkillGraphCanvas({ nodes, edges }: {
   nodes: GraphNode[];
   edges: { source: string; target: string; weight: number }[];
 }) {
