@@ -535,7 +535,7 @@ time.
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/health` | Run ID and posting count |
-| GET | `/api/dashboard` | Overview KPIs, segments (salary, skills, modality, cities), top skills, skills by education level, salary by department and model metrics, skills graph (top 60 nodes by PageRank with degree, edges among them, top-10 transversal skills by degree and bridges by betweenness, Louvain communities with size and top 3 skills, density / average degree / average clustering of the full graph), segment links, 2D projection, clustering comparison |
+| GET | `/api/dashboard` | Overview KPIs, segments (salary, skills, modality, cities), top skills, skills by education level, salary by department and model metrics, skills graph (top 60 nodes by PageRank with degree, edges among them, top-10 transversal skills by degree and bridges by betweenness, Louvain communities with size and top 3 skills, density / average degree / average clustering of the full graph), segment links, 2D projection, NMF topics (with postings, share, top titles, top segments and over-represented skills when `topic_assignments.parquet` is present), clustering comparison, `skill_insights` (top-30 skill table with transversal / especializada / intermedia kind, PageRank core, shared and missing skills per segment link, top skill pairs by PMI, high-salary share by skill with salary boosts, niche skills) and `community_validation` (Louvain on a PMI-weighted skill graph and each segment's dominant PMI community) |
 | GET | `/api/segments/{id}/postings` | Sample postings of a segment, with links |
 | POST | `/api/cv/match` | Multipart: `file` (PDF/DOCX/TXT ≤ 5 MB) or `text`; optional `city`, `modality`, `limit` |
 
@@ -622,13 +622,23 @@ Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP and three.js, in
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
   (`frontend/app/icon.svg`).
 - **Dashboard tabs** (`components/dashboard/`). Candidates: most requested
-  skills, occupational segments (each accordion lists its nearest occupations
-  from `segment_links`), transversal skills (degree) and bridges
-  (betweenness, drawn as relative bars). Market: the skills graph with a
-  community legend named by top skills; graph metrics, corpus quality and
-  sources, NMF topics, the 2D projection and the clustering comparison sit in
-  collapsed technical details. Employers: salary panels (the coverage figure
-  lives in the salary distribution note), modality, contracts, cities.
+  skills and occupational segments (each accordion lists its nearest
+  occupations from `segment_links`). Skills (`skills-tab.tsx`, fed by
+  `skill_insights`): key skills (core by PageRank, bridges by betweenness,
+  and a pivot picker showing shared and missing skills toward nearby
+  segments; runs without `core` fall back to the degree ranking),
+  transversal vs. specialised skills, skill pairs by PMI, skills and salary
+  (share of postings at $2M+ and complement boosts, flagged as association),
+  niche skills, and a sortable centrality table in technical details. Market:
+  the skills graph with a community legend named by top skills, a community
+  structure panel (`community_validation`: PMI modularity, communities,
+  dominant community per segment, plus density and average clustering), NMF
+  topics as cards (title, share, typical titles, segments, skills; a
+  collapsed term list when the run lacks those fields), and collapsed
+  technical details for the remaining graph metrics, the 2D projection and
+  the clustering comparison. Employers: salary panels (the coverage figure
+  lives in the salary distribution note), modality, contracts, cities. Every
+  section hides itself when the API bundle predates its fields.
 - **Dashboard and CV.**
   - KPIs count up and bars grow.
   - The graph draws its edges.
@@ -692,6 +702,11 @@ pools keep ~150 MB of freed buffers.
 
 One dated line per change, in system terms. Newest first.
 
+- **2026-11-24** — Skill insights get principled noise rules (same JSON shape, no new run artifact): postings with an identical set of ≥ 4 skills collapse as one template regardless of title and company; skills asked by ≥ 5% of deduped postings are *generic* and are excluded from pivots (replacing the transversal + core + top-20 exclusion) and from the PMI graph before Louvain; pivots use share rules (`shared` ≥ 5% in both segments, `missing` ≥ 5% and lift ≥ 1.5 in the target with at most half that share in the origin); `kind` uses breadth (segments with lift ≥ 1, transversal at ≥ 40% of segments) instead of degree percentile; niche partners use their own floors (≥ 20 together, partner ≥ 50 postings); topic top titles skip placeholders and non-title strings and topic skills need ≥ 10% share.
+
+- **2026-11-24** — `skill_insights` and `community_validation` are cleaned up for the real corpus (same JSON shape): skills are merged by normalized label, near-identical postings (same skill set with the same title or company) are collapsed before co-occurrence, salary, niche, pivot and community figures, pairs rank by NPMI with minimum support and skip synonyms (label containment, shared matcher alias), communities run on a sparse NPMI graph (NPMI ≥ 0.10, ≥ 30 postings, top-10 edges per skill), pivots list distinctive non-generic skills by segment lift, and salary thresholds rise (≥ 100 postings per skill, boosts ≥ 150 per combination). Co-occurrence code moves to the new `api/skill_cooccurrence.py`; no new run artifact.
+- **2026-11-24** — Web app: new "Habilidades" dashboard tab built on `skill_insights` (core, bridge and pivot skills, transversal vs. specialised, PMI pairs, skills and salary, niche skills, centrality table; the transversal/bridge panel moves here from Candidates); Market gains a community-structure panel from `community_validation` (density and average clustering move there from the graph-metrics detail) and NMF topics become HR-readable cards when topics carry postings, titles, segments and skills; the corpus quality and sources detail is removed. All new fields are optional and their sections hide on older bundles.
+- **2026-11-24** — `/api/dashboard` gains `skill_insights` (skill kinds, PageRank core, segment pivots, PMI pairs, salary associations and boosts, niche skills) and `community_validation` (PMI-weighted Louvain vs. segments), and each topic gains size, titles, segments and skills; built in the new `api/skill_insights.py` over the full run when the dashboard is computed (no new analytics run; full-run downloads now include `topic_assignments.parquet`; serving bundles built before this change lack the new keys until the next bundle build).
 - **2026-11-24** — Web app: the dashboard shows transversal and bridge skills, a named community legend, graph metrics and per-segment nearby occupations (replacing the "Ocupaciones vecinas" and "Cobertura salarial" panels; source mix and projection move to technical details); an inline `<head>` script covers `/` before first paint so the intro gate no longer flashes the landing on refresh.
 - **2026-11-24** — `/api/dashboard` `graph` gains node degree, `rankings` (transversal skills, bridges), `communities` and full-graph density / average degree / average clustering, computed over the full run when the dashboard is built (in the serving bundle they arrive precomputed; bundles built before this change lack them until the next analytics run).
 

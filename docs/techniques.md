@@ -18,7 +18,7 @@ TypeScript mirror of these techniques on six example rows
 | 7 | [Topics (NMF)](#7-topics-nmf) | Gold | `analytics/features.py` |
 | 8 | [Occupational segments](#8-occupational-segments) | Gold | `analytics/features.py`, `analytics/comparison.py` |
 | 9 | [Salary band model](#9-salary-band-model) | Gold | `analytics/supervised.py` |
-| 10 | [Skills graph and transition routes](#10-skills-graph-and-transition-routes) | Gold | `analytics/graph.py` |
+| 10 | [Skills graph and transition routes](#10-skills-graph-and-transition-routes) | Gold | `analytics/graph.py`, `api/skill_insights.py` |
 | 11 | [CV matching, niches, pivots and gaps](#11-cv-matching-niches-pivots-and-gaps) | Serving | `api/cv.py`, `api/insights.py` |
 | 12 | [Validation](#12-validation) | Review | `analytics/validation.py` |
 
@@ -205,8 +205,129 @@ average clustering (networkx); the 10 skills with most neighbours (degree,
 ties by weighted degree) as *transversal*, the 10 with highest betweenness as
 *bridges*, and each community's size and 3 most demanded skills.
 
+**Skill insights** (`api/skill_insights.py` and `api/skill_cooccurrence.py`,
+dashboard `skill_insights`, `community_validation` and the extended `topics`).
+Computed over the full run when the dashboard is built, on a posting × skill
+incidence of the graph nodes. They are associations between skills, segments
+and salary bands, never causal effects. Three corrections come first, because
+on the real corpus raw co-occurrence was dominated by synonyms, by templates
+posted thousands of times and by rare skills:
+
+- *Label merge*: graph skills whose labels normalize to the same text
+  (casefold, accents and punctuation dropped, spaces collapsed; the ESCO
+  matcher's `normalize_text`) are one skill, represented by the URI with most
+  postings. A posting asking for two merged URIs counts once.
+- *Posting dedupe*: `postings.parquet` has no description and the run's
+  duplicate pairs are a capped sample, so postings are collapsed on stable keys
+  (first occurrence kept). With ≥ 4 skills (`TEMPLATE_MIN_SKILLS`), a posting
+  is a copy of any earlier one with the identical skill set, whatever its title
+  or company: an exact combination of four or more skills repeated is a
+  reposted template, not independent demand (on the real corpus one template
+  was reposted ~971 times with changing title *and* company, and its skills
+  filled the pair list). With 3 skills a copy needs the same skill set and the
+  same normalized title, or the same skill set and the same known company;
+  with fewer skills a copy needs the same title, company and skill set (short
+  profiles are too common to collapse on skills alone). Pairs, salary, niches,
+  pivots, kinds, focus segments and communities use the deduplicated postings
+  (`N` of them, `n_A` asking for skill `A`, `n_AB` for both); the table's
+  demand (`postings`, `share`) and topic profiles count every posting.
+- *Generic skills*: asked by ≥ 5% of the deduplicated postings
+  (`GENERIC_MIN_SHARE`; on the real corpus: técnicas de venta, servicio al
+  cliente, comunicación, trabajar en equipos, gestionar el inventario,
+  logística, hojas de cálculo). They are left out of pivots and of the PMI
+  community graph.
+- *Redundant pairs*: two skills are the same concept, and never form a pair, a
+  niche partner, a salary complement or a PMI-graph edge, when one normalized
+  label contains the other as whole words (`dermatología` / `dermatología y
+  venereología`) or they share an alias in the API matcher (one phrase matched
+  both, e.g. `CSS`).
+
+Definitions:
+
+- *Lift* `= P(A∩B) / (P(A)·P(B)) = n_AB · N / (n_A · n_B)`; *PMI* `= log₂(lift)`
+  (0 = independent, > 0 = asked together more than chance); *NPMI* `= PMI /
+  −log₂ P(A∩B)`, in `[−1, 1]` (1 = always together). Raw PMI favours rare
+  skills (a pair seen 159 times reached lift 3,504); NPMI corrects that.
+  `pairs` lists the 15 pairs with highest NPMI (ties: more postings together)
+  among those with `n_AB ≥ 50`, `n_A, n_B ≥ 200` and NPMI > 0; each keeps
+  `lift` and `pmi = log₂(lift)`.
+- *Segment share* of a skill = share of a segment's deduplicated postings
+  asking for it; *segment lift* = segment share / share in all deduplicated
+  postings (the `segment_skills.lift` definition, on deduplicated postings and
+  merged skills). *Top segment share* = share of the skill's deduplicated
+  postings inside its most common K-Means segment. *Breadth* = number of
+  segments where the skill's segment lift is ≥ 1 (asked at least as often as in
+  the corpus). *Kind*: `especializada` when the top segment share is ≥ 0.60;
+  otherwise `transversal` when breadth ≥ 0.40 × number of segments
+  (`TRANSVERSAL_MIN_SEGMENT_FRACTION`); `intermedia` otherwise. Graph degree is
+  not used: the co-occurrence graph is dense and degree mostly tracks
+  frequency, which labelled spread-out but profile-specific skills (payroll,
+  social security law) as transversal. `table` shows the 30 most demanded
+  merged skills with their kind; `core` ("núcleo duro") the 10 with highest
+  PageRank.
+- *Pivots*: for every direct segment link (both directions), over non-generic
+  skills only. `missing` = up to 5 skills with target share ≥ 0.05
+  (`PIVOT_MIN_SHARE`), target lift ≥ 1.5 (`PIVOT_MIN_LIFT`) and origin share
+  ≤ 0.5 × target share (`PIVOT_MISSING_MAX_RATIO`), ranked by target share.
+  `shared` = up to 5 skills with share ≥ 0.05 in both segments that are not
+  `missing`, ranked by the smaller of the two shares (no lift requirement:
+  the earlier "distinctive in both" rule left `shared` empty for every pair on
+  the real corpus). The old exclusion (transversal + core + 20 most frequent)
+  is replaced by the generic share rule; it dropped contabilidad,
+  electricidad, mecánica or nóminas, which tell profiles apart.
+- *High salary* = band lower bound ≥ $2M (the dashboard's "$2M o más"), over
+  deduplicated postings (so `overall_high_share` can differ slightly from the
+  salary panels, which count every posting). For skills with ≥ 100 banded
+  postings, high share = high / banded and lift = high share / overall high
+  share; `top` and `bottom` show 8 each (disjoint). *Salary boost*: anchors
+  are skills with ≥ 300 banded postings and a high share below the overall
+  one; for each, the complement `B` (≥ 150 banded postings with both, not a
+  synonym) whose combination has the largest high share, kept when it beats
+  the anchor alone by ≥ 5 points; up to 8, largest anchors first.
+- *Niche*: skills with ≥ 100 deduplicated postings, degree at or below the
+  25th percentile and top segment share ≥ 0.60 (up to 10, most concentrated
+  first), each with the partner of highest NPMI among skills with `n_AB ≥ 20`
+  (`NICHE_PARTNER_MIN_TOGETHER`), partner in ≥ 50 deduplicated postings
+  (`NICHE_PARTNER_MIN_MARGINAL`), not redundant and NPMI > 0; `partner_lift`
+  is that pair's lift. These floors are lower than the pair list's (50 / 200)
+  because a niche skill rarely reaches them: with the pair floors
+  neonatología, pediatría or medicina intensiva had no partner.
+- *Community validation*: Louvain (`seed=42`) on a sparse NPMI graph over the
+  merged, non-generic skills. Generic skills are removed before building the
+  graph, the usual step in co-occurrence community detection (frequent,
+  context-free terms are the noise the PMI filter targets): they are asked
+  together with every family, so they form one hub that absorbed 12 of 16
+  segments and gave Q ≈ 0.076. `Q` is reported as it comes out, not tuned. An
+  edge needs NPMI ≥ 0.10, `n_AB ≥ 30` and two distinct
+  concepts, and is kept when it is among the 10 strongest qualifying edges of
+  either endpoint; skills with no edge are left out. Weight = NPMI: counts
+  would let frequent skills dominate again (that is the co-occurrence graph
+  this one validates), while NPMI is bounded and frequency-free. NPMI ≥ 0.10
+  is a clearly positive association: lift ≥ ~2.6 for a pair seen 30 times in
+  ~400k postings, ≥ ~1.5 for one seen 5,000 times. The top-k cap keeps the
+  graph sparse (a positive-PMI graph over 400 skills was nearly complete,
+  ~59k edges, Q ≈ 0.005, one community of 279 skills). Thresholds are fixed
+  by these rules, not tuned to a target `Q`. It reports edges, communities
+  (size, 3 skills with most postings) and modularity; each segment's skill
+  mass (sum over the community's skills of their share of the segment's
+  postings) is spread over those communities, giving the dominant one, its
+  share and how many hold ≥ 10%. A segment concentrated in one PMI community
+  is coherent in skills; a spread one mixes skill families.
+- *Topic profiles* (needs `topic_assignments.parquet`): postings and share per
+  NMF topic, its 3 most common cleaned titles, 2 most common segments and the 4
+  skills with highest lift inside the topic among those in ≥ 10% of its
+  postings (`TOPIC_SKILL_MIN_SHARE`; at 5% rare skills with huge lift, such as
+  aprendizaje automático in a management topic, took the list). A title counts
+  only if it reads as a job title: no template placeholder (`$`, `{`, `}`), at
+  least 3 characters, at least half of its non-space characters letters, and
+  one word of ≥ 3 letters. This drops `$hno codigo vacante$obrero` or
+  `12345-678`; a wordy non-title such as `Firma contrato al día 3` still
+  passes (no general rule tells it apart without a blacklist).
+
 **Parameters.** Top 400 skills as nodes, edges with ≥ 2 shared postings,
-3 neighbour segments, Louvain `seed=42`.
+3 neighbour segments, Louvain `seed=42`; skill-insight thresholds are the
+named constants at the top of `api/skill_insights.py` and
+`api/skill_cooccurrence.py` (values above).
 
 **Output.** `segment_skills.parquet`, `skill_graph_nodes.parquet`,
 `skill_graph_edges.parquet`, `graph_metrics.json`,

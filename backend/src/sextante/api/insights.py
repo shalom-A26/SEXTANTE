@@ -13,6 +13,8 @@ import pandas as pd
 from sextante.analytics.supervised import band_distribution, estimate_salary, salary_band
 
 from .data import RunData
+from .skill_cooccurrence import skill_incidence
+from .skill_insights import community_validation, pmi_bridges, skill_insights, topic_profiles
 
 GAP_MIN_SHARE = 0.15
 
@@ -138,6 +140,12 @@ def _graph_rankings(nodes: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _with_pmi_bridges(rankings: dict[str, Any], run: RunData, incidence: Any) -> dict[str, Any]:
+    """Bridges from the sparse NPMI graph when the full run is available (see pmi_bridges)."""
+    bridges = pmi_bridges(run, incidence)
+    return {**rankings, "bridges": bridges} if bridges else rankings
+
+
 def _graph_communities(nodes: pd.DataFrame) -> list[dict[str, Any]]:
     """Louvain communities by size, each with its three most demanded skills."""
     if nodes.empty:
@@ -201,6 +209,9 @@ def dashboard(run: RunData) -> dict[str, Any]:
         projection = projection.iloc[np.linspace(0, len(projection) - 1, 1500, dtype=int)]
     direct = run.transitions[run.transitions["steps"] == 1] if not run.transitions.empty \
         else run.transitions
+    incidence = skill_incidence(run)  # full run only; see skill_cooccurrence.py
+    topics = topic_profiles(run, _records(run.topics) if not run.topics.empty else [],
+                            incidence, postings["title"].fillna("").map(clean_title))
 
     return {
         "run": {
@@ -248,7 +259,7 @@ def dashboard(run: RunData) -> dict[str, Any]:
                                      "betweenness", "community", "degree",
                                      "weighted_degree"]]) if not nodes.empty else [],
             "edges": _records(edges) if not edges.empty else [],
-            "rankings": _graph_rankings(run.skill_nodes),
+            "rankings": _with_pmi_bridges(_graph_rankings(run.skill_nodes), run, incidence),
             "communities": _graph_communities(run.skill_nodes),
             "segment_links": [
                 {"from": int(r.from_segment), "to": int(r.to_segment),
@@ -258,8 +269,10 @@ def dashboard(run: RunData) -> dict[str, Any]:
         },
         "projection": _records(projection[["component_1", "component_2", "cluster_id"]])
         if not projection.empty else [],
-        "topics": _records(run.topics) if not run.topics.empty else [],
+        "topics": topics,
         "clustering_comparison": run.comparison,
+        "skill_insights": skill_insights(run, incidence),
+        "community_validation": community_validation(run, incidence),
     }
 
 

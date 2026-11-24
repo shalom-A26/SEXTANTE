@@ -59,15 +59,16 @@ class RunData:
     segment_stats: dict[int, dict[str, Any]] | None = None  # serving bundle only
 
 
-# Artifacts the API reads; the rest of a run (duplicates, topic assignments,
-# per-posting estimates) is for analysts and is not downloaded.
+# Artifacts the API reads; the rest of a run (duplicates, per-posting
+# estimates) is for analysts and is not downloaded. Topic assignments are read
+# only when the dashboard is built over a full run (``skill_insights.topic_profiles``).
 API_FILES = (
     "manifest.json", "eda.json", "postings.parquet", "tfidf_matrix.npz",
     "tfidf_vectorizer.joblib", "segment_profiles.csv", "segment_skills.parquet",
     "skill_graph_nodes.parquet", "skill_graph_edges.parquet", "segment_transitions.parquet",
     "topics.csv", "segment_projection.parquet", "supervised_metrics.json",
     "clustering_comparison.json", "graph_metrics.json", "salary_model.joblib",
-    "skill_mentions.parquet",
+    "skill_mentions.parquet", "topic_assignments.parquet",
 )
 
 
