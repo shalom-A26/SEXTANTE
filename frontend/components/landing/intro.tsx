@@ -9,6 +9,14 @@ import { gsap } from "@/components/motion/gsap";
 import { worldState } from "@/components/world/state";
 import { setSound } from "@/lib/ambient";
 
+/** Removes the pre-paint cover set by the inline script in app/layout.tsx; `release` also restores scrolling. */
+function uncover(release: boolean) {
+  const root = document.documentElement;
+  if (!root.hasAttribute("data-intro-cover")) return;
+  root.removeAttribute("data-intro-cover");
+  if (release) root.style.overflow = "";
+}
+
 // Entry gate (once per session): logo, tagline, load progress, and the choice to
 // enter with the ambient sound. The click also unlocks Web Audio.
 export function Intro() {
@@ -17,7 +25,10 @@ export function Intro() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (sessionStorage.getItem("sx-intro")) return;
+    if (sessionStorage.getItem("sx-intro")) {
+      uncover(true);
+      return;
+    }
     setOpen(true);
     document.documentElement.dataset.intro = "open";
     document.documentElement.style.overflow = "hidden";
@@ -31,6 +42,11 @@ export function Intro() {
       window.clearTimeout(fallback);
     };
   }, []);
+
+  // The gate now covers the page: drop the pre-paint cover so the exit clip reveals the page, not the cover.
+  useEffect(() => {
+    if (open) uncover(false);
+  }, [open]);
 
   useEffect(() => {
     if (open) gsap.to(".intro-progress i", { scaleX: ready ? 1 : 0.7, duration: ready ? 0.5 : 2.5, ease: "power2.out" });

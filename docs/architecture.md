@@ -535,7 +535,7 @@ time.
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/health` | Run ID and posting count |
-| GET | `/api/dashboard` | Overview KPIs, segments (salary, skills, modality, cities), top skills, skills by education level, salary by department and model metrics, skills graph, segment links, 2D projection, clustering comparison |
+| GET | `/api/dashboard` | Overview KPIs, segments (salary, skills, modality, cities), top skills, skills by education level, salary by department and model metrics, skills graph (top 60 nodes by PageRank with degree, edges among them, top-10 transversal skills by degree and bridges by betweenness, Louvain communities with size and top 3 skills, density / average degree / average clustering of the full graph), segment links, 2D projection, clustering comparison |
 | GET | `/api/segments/{id}/postings` | Sample postings of a segment, with links |
 | POST | `/api/cv/match` | Multipart: `file` (PDF/DOCX/TXT ≤ 5 MB) or `text`; optional `city`, `modality`, `limit` |
 
@@ -581,7 +581,12 @@ Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP and three.js, in
 - **Intro gate** (`components/landing/intro.tsx`, once per session): logo,
   tagline, load progress, "Entrar con/sin sonido". The ambient sound
   (`lib/ambient.ts`) is synthesised with Web Audio (wind + soft pad), so there
-  are no audio files; the header toggle mutes it.
+  are no audio files; the header toggle mutes it. On a hard load of `/` with
+  no `sx-intro` in `sessionStorage`, an inline `<head>` script in
+  `app/layout.tsx` sets `data-intro-cover` on `<html>` before first paint (a
+  full-screen layer with the gate's background), so the landing never flashes
+  before the gate mounts; `Intro` removes it once the gate is on screen (a
+  10 s timeout in the script is the fail-safe).
 - **3D world** (`components/world/`). A procedural three.js dusk valley:
   terrain with vertex colours, a reflecting lake (`Reflector`), standing
   stones, ~70k instanced grass blades swaying in a shader, drifting petals and
@@ -616,6 +621,14 @@ Next.js 16, React 19, Tailwind v4 + shadcn/ui, GSAP and three.js, in
   profiles, ledger, walkthrough and dashboard share a single fetch.
 - **Logo:** `docs/assets/logo.svg`, also used as the favicon
   (`frontend/app/icon.svg`).
+- **Dashboard tabs** (`components/dashboard/`). Candidates: most requested
+  skills, occupational segments (each accordion lists its nearest occupations
+  from `segment_links`), transversal skills (degree) and bridges
+  (betweenness, drawn as relative bars). Market: the skills graph with a
+  community legend named by top skills; graph metrics, corpus quality and
+  sources, NMF topics, the 2D projection and the clustering comparison sit in
+  collapsed technical details. Employers: salary panels (the coverage figure
+  lives in the salary distribution note), modality, contracts, cities.
 - **Dashboard and CV.**
   - KPIs count up and bars grow.
   - The graph draws its edges.
@@ -678,6 +691,9 @@ pools keep ~150 MB of freed buffers.
 ## Architecture changelog
 
 One dated line per change, in system terms. Newest first.
+
+- **2026-11-24** — Web app: the dashboard shows transversal and bridge skills, a named community legend, graph metrics and per-segment nearby occupations (replacing the "Ocupaciones vecinas" and "Cobertura salarial" panels; source mix and projection move to technical details); an inline `<head>` script covers `/` before first paint so the intro gate no longer flashes the landing on refresh.
+- **2026-11-24** — `/api/dashboard` `graph` gains node degree, `rankings` (transversal skills, bridges), `communities` and full-graph density / average degree / average clustering, computed over the full run when the dashboard is built (in the serving bundle they arrive precomputed; bundles built before this change lack them until the next analytics run).
 
 - **2026-11-19** — Docs consolidated into `architecture.md`, `data.md` and `techniques.md`; `AGENTS.md` gains the docs-sync table and `CLAUDE.md` the stack notes. The dataset card now points to `docs/data.md` for source viability.
 - **2026-11-19** — Repository split into `backend/` (one `sextante` package: `core`, `ingestion`, `analytics`, `api`) and `frontend/`. CLIs become `python -m sextante.ingestion` / `python -m sextante.analytics`; the API image builds from `backend/Dockerfile`; Vercel's root directory is `frontend`.

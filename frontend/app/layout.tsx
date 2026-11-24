@@ -36,12 +36,18 @@ const DATA = [
   ["Servicio Público de Empleo", "https://www.serviciodeempleo.gov.co/"],
 ];
 
+// Runs while the HTML is parsed, before first paint: on "/" (the only route that renders <Intro />)
+// with no "sx-intro" this session, cover the page so the landing never flashes before the gate mounts.
+// Intro removes the cover; the timeout is a last resort so it can never stay if the app fails to start.
+const INTRO_COVER = `(function(){try{if(location.pathname!=="/"||sessionStorage.getItem("sx-intro"))return;var d=document.documentElement;d.setAttribute("data-intro-cover","");d.style.overflow="hidden";setTimeout(function(){if(!d.hasAttribute("data-intro-cover"))return;d.removeAttribute("data-intro-cover");if(d.dataset.intro!=="open")d.style.overflow=""},10000)}catch(e){}})()`;
+
 const pad = (i: number) => `[${String(i + 1).padStart(2, "0")}]`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={cn(mono.variable)}>
+    <html lang="es" className={cn(mono.variable)} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: INTRO_COVER }} />
         <link rel="preconnect" href="https://api.fontshare.com" />
         <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={FONTSHARE} />
