@@ -24,6 +24,51 @@ export type Segment = {
 export type RankedSkill = { esco_uri: string; skill_label: string; postings: number; degree: number; community: number };
 export type GraphCommunity = { community: number; size: number; top_skills: string[] };
 
+export type SkillKind = "transversal" | "especializada" | "intermedia";
+/** One row of the centrality table (top 30 skills by postings). */
+export type SkillMetrics = {
+  esco_uri: string; skill_label: string; postings: number; share: number;
+  degree: number; weighted_degree: number; betweenness: number; pagerank: number; community: number;
+  top_segment: number | null; top_segment_share: number | null; kind: SkillKind;
+};
+export type SalarySkill = { skill_label: string; postings_with_salary: number; high_share: number; lift: number };
+export type SkillPivot = { from_segment: number; to_segment: number; similarity: number; shared: string[]; missing: string[] };
+
+// Skill-level analysis of the full graph; absent in bundles built before it, and any list may be empty.
+export type SkillInsights = {
+  table?: SkillMetrics[];
+  core?: { esco_uri: string; skill_label: string; postings: number; pagerank: number; degree: number }[];
+  pivots?: SkillPivot[];
+  pairs?: { a: string; b: string; together: number; lift: number; pmi: number }[];
+  salary?: {
+    overall_high_share: number | null;
+    top?: SalarySkill[];
+    bottom?: SalarySkill[];
+    boosts?: { anchor: string; complement: string; anchor_postings: number; anchor_high_share: number; combo_postings: number; combo_high_share: number }[];
+  };
+  niche?: { skill_label: string; postings: number; degree: number; top_segment: number; top_segment_share: number; partner: string; partner_lift: number }[];
+};
+
+// Communities recomputed on the PMI-weighted graph and compared with the occupational segments.
+export type CommunityValidation = {
+  pmi_edges?: number;
+  pmi_communities?: number;
+  pmi_modularity?: number | null;
+  communities?: GraphCommunity[];
+  segments?: { segment: number; dominant_community: number; dominant_share: number; communities_used: number }[];
+};
+
+export type Topic = {
+  topic_id: number;
+  terms: string;
+  // Newer runs enrich each topic; all optional.
+  postings?: number;
+  share?: number;
+  top_titles?: string[];
+  top_segments?: { segment: number; share: number }[];
+  top_skills?: string[];
+};
+
 export type Dashboard = {
   run: { run_id: string; created_at_utc: string; corpus: string; revision: string; synthetic: boolean };
   overview: {
@@ -74,7 +119,9 @@ export type Dashboard = {
     };
     communities?: GraphCommunity[];
   };
-  topics: { topic_id: number; terms: string }[];
+  topics: Topic[];
+  skill_insights?: SkillInsights;
+  community_validation?: CommunityValidation;
   projection: { component_1: number; component_2: number; cluster_id: number }[];
   clustering_comparison: {
     methods?: Record<string, { clusters: number; silhouette_cosine: number | null; noise_share: number }>;

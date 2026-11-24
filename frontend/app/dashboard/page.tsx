@@ -6,6 +6,7 @@ import { CandidatesTab } from "@/components/dashboard/candidates-tab";
 import { EmployersTab } from "@/components/dashboard/employers-tab";
 import { MarketTab } from "@/components/dashboard/market-tab";
 import { ProgramsTab } from "@/components/dashboard/programs-tab";
+import { SkillsTab } from "@/components/dashboard/skills-tab";
 import { CountUp, Reveal, SplitHeading } from "@/components/motion";
 import { gsap, MOTION_OK, useGSAP } from "@/components/motion/gsap";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiErrorMessage, getDashboard, pct, type Dashboard } from "@/lib/api";
 import { modeKpi } from "@/lib/dashboard";
 
-const TABS = ["Candidatos", "Empleadores", "Programas académicos", "Mapa del mercado"] as const;
+const TABS = ["Candidatos", "Habilidades", "Empleadores", "Programas académicos", "Mapa del mercado"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function DashboardPage() {
@@ -74,6 +75,7 @@ export default function DashboardPage() {
           {TABS.map((t) => <TabsTrigger key={t} value={t} className="tab-trigger">{t}</TabsTrigger>)}
         </TabsList>
         <TabsContent value="Candidatos"><CandidatesTab data={data} /></TabsContent>
+        <TabsContent value="Habilidades"><SkillsTab data={data} /></TabsContent>
         <TabsContent value="Empleadores"><EmployersTab data={data} /></TabsContent>
         <TabsContent value="Programas académicos"><ProgramsTab data={data} /></TabsContent>
         <TabsContent value="Mapa del mercado"><MarketTab data={data} /></TabsContent>

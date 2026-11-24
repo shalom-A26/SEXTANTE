@@ -123,6 +123,3 @@ export function communityLegend(nodes: { skill_label: string; postings: number; 
 export function shareOfTotalBars(items: { label: string; count: number }[], total: number): Bar[] {
   return items.map((c) => ({ label: c.label, value: total ? Math.min(1, c.count / total) : 0, hint: `n=${n(c.count)}` }));
 }
-
-/** Topic terms as chips; the API sends them joined with " | ". */
-export const topicTerms = (terms: string) => terms.split(" | ").map((t) => t.trim()).filter(Boolean);

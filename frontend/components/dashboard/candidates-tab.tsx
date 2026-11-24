@@ -2,13 +2,11 @@ import { BarList } from "@/components/charts";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { pct, type Dashboard } from "@/lib/api";
-import { bridgeBars, nearbySegments, segmentNames, shareOfTotalBars, skillBars, transversalBars } from "@/lib/dashboard";
+import { nearbySegments, segmentNames, shareOfTotalBars, skillBars } from "@/lib/dashboard";
 import { Panel } from "./panel";
 
 export function CandidatesTab({ data }: { data: Dashboard }) {
   const names = segmentNames(data.segments);
-  const transversal = transversalBars(data.graph);
-  const bridges = bridgeBars(data.graph);
   return (
     <div className="grid-1">
       <div className="grid-2">
@@ -59,26 +57,6 @@ export function CandidatesTab({ data }: { data: Dashboard }) {
           </Accordion>
         </Panel>
       </div>
-      {(transversal.length > 0 || bridges.length > 0) && (
-        <Panel title="Habilidades transversales y puente" note="Calculado sobre el grafo completo de habilidades que aparecen juntas en las vacantes.">
-          <div className="rank-pair">
-            {transversal.length > 0 && (
-              <div>
-                <h4>Transversales</h4>
-                <p className="muted">Aparecen junto a más habilidades distintas: te abren más puertas. El número es cuántas.</p>
-                <BarList data={transversal} unit="count" />
-              </div>
-            )}
-            {bridges.length > 0 && (
-              <div>
-                <h4>Puente</h4>
-                <p className="muted">Conectan áreas que casi no se tocan: te ayudan a cambiar de campo. La barra compara con la más puente.</p>
-                <BarList data={bridges} unit="relative" />
-              </div>
-            )}
-          </div>
-        </Panel>
-      )}
     </div>
   );
 }
