@@ -1,0 +1,390 @@
+\documentclass[journal]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{url}
+\usepackage{array}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+\usetikzlibrary{arrows.meta,positioning}
+
+\definecolor{ok}{HTML}{1F9D8A}
+\definecolor{part}{HTML}{E9B44C}
+\definecolor{plan}{HTML}{D3DCE3}
+\definecolor{bronze}{HTML}{CD7F32}
+\definecolor{silver}{HTML}{7F8C8D}
+\definecolor{gold}{HTML}{D4AF37}
+
+\hyphenation{vacan-tes}
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000
+\raggedbottom
+
+% Numeración como pide la plantilla del curso: 1, 2, 2.1, Tabla 1 y Figura 1
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+\renewcommand{\thetable}{\arabic{table}}
+\addto\captionsspanish{\renewcommand{\tablename}{Tabla}\renewcommand{\figurename}{Figura}}
+\renewcommand{\abstractname}{Resumen}
+\renewcommand{\IEEEkeywordsname}{Palabras clave}
+
+% Entrada de referencias en APA 7: sangría francesa
+\newcommand{\apa}[1]{\par\noindent\hangindent=1.2em\hangafter=1 #1\par\vspace{2pt}}
+
+\begin{document}
+
+\title{SEXTANTE: minería de texto para identificar habilidades y perfiles ocupacionales en vacantes colombianas}
+
+\author{\textbf{Alejandro Patron Montero} --- T00078181\\
+\textit{Rol: Data Engineer \& Frontend}\\[3pt]
+\textbf{Shalom Jhoanna Arrieta Marrugo} --- T00082962\\
+\textit{Rol: Backend \& Data Analysis}\\[3pt]
+\textbf{Karla Andrea Barraza Torres} --- T00082880\\
+\textit{Rol: Storytelling y Narrativa de datos}\\[3pt]
+\textbf{Katlyn Gutiérrez Cardona} --- T00082259\\
+\textit{Rol: Storytelling y Narrativa de datos}\\[5pt]
+Curso de Analítica y Data Mining $\cdot$ Universidad Tecnológica de Bolívar $\cdot$ 2026}
+
+\markboth{Proyecto Final, Fase 3 --- Analítica y Data Mining}{SEXTANTE: paper final}
+
+\maketitle
+
+\begin{abstract}
+El título de una vacante rara vez describe lo que el empleador exige: la información útil está en la descripción, en texto libre y sin un vocabulario uniforme entre portales. Este trabajo presenta SEXTANTE, un sistema para identificar las habilidades demandadas en vacantes colombianas y agrupar perfiles ocupacionales a partir de sus descripciones. Los datos provienen de la exportación oficial del Servicio Público de Empleo (SPE) y de portales vía JobSpy, procesados mediante un pipeline de ingeniería de datos estructurado en capas Bronze, Silver, Gold y Consumo, normalizados a un esquema canónico de 17 variables y actualizados de forma automática. Sobre una revisión fijada de 557.279 vacantes (24 de noviembre de 2026) se aplicaron extracción de habilidades con ESCO, representación TF-IDF, factorización NMF y agrupamiento K-Means. Se obtuvieron 1.131.942 menciones de habilidades, 16 perfiles ocupacionales con silueta coseno de 0,0150 sobre 5.000 vacantes y un clasificador de banda salarial con exactitud de 0,748 frente a 0,604 de la línea base, con validación cruzada de cinco pliegues. La separabilidad del agrupamiento es baja, por lo que los perfiles se reportan como señales exploratorias y no como clasificaciones validadas. Se concluye que el enfoque no supervisado permite describir la demanda agregada, siempre que se expliciten su sensibilidad al vocabulario y la validación manual pendiente.
+\end{abstract}
+
+\begin{IEEEkeywords}
+minería de texto, vacantes de empleo, habilidades, ESCO, segmentación ocupacional
+\end{IEEEkeywords}
+
+\IEEEpeerreviewmaketitle
+
+\section{Introducción}
+\textbf{Contexto.} Los portales de empleo concentran miles de vacantes cuya descripción contiene los requisitos reales del cargo. En Colombia, la exportación pública del Servicio Público de Empleo reúne cerca de 285.000 vacantes publicadas desde 2021 (Servicio Público de Empleo, s.~f.), a las que se suman las de portales privados. Para nombrar las habilidades que aparecen en esos textos existe un vocabulario común, la clasificación europea ESCO (Comisión Europea, 2025). La literatura reciente describe la identificación de habilidades en ofertas de empleo como una tarea consolidada, que parte de texto no estructurado y abarca desde diccionarios de habilidades hasta aprendizaje profundo (Khaouja et al., 2021; Senger et al., 2024), y existen conjuntos anotados de habilidades, como SkillSpan para vacantes en inglés (Zhang et al., 2022). La información interesa a candidatos, empleadores y programas académicos que quieren contrastar su oferta formativa con lo que el mercado pide.
+
+\textbf{Problema.} Un título como «Analista junior» puede esconder funciones y requisitos muy distintos. Las habilidades están en el texto libre de la descripción, sin vocabulario uniforme entre portales, lo que impide medir qué habilidades se demandan, cómo se relacionan los perfiles y qué se paga por ellos. Analizar estos textos con datos permite pasar de leer vacantes una a una a describir el mercado en conjunto.
+
+\textbf{Pregunta de análisis.} «¿Qué habilidades demanda el mercado laboral colombiano en sus vacantes y cómo se agrupan en perfiles ocupacionales?»
+
+\textbf{Objetivo general.} Identificar las habilidades demandadas en vacantes colombianas y agrupar sus perfiles ocupacionales a partir del texto de las descripciones mediante minería de texto.
+
+\textbf{Objetivos específicos.}
+\begin{enumerate}
+\setlength{\itemsep}{1pt}
+\item Aplicar la taxonomía ESCO a las descripciones para extraer y contar las habilidades mencionadas.
+\item Aplicar TF-IDF y K-Means para segmentar las vacantes en perfiles ocupacionales, describiendo cada grupo por sus términos representativos y evaluando la separación con el coeficiente de silueta.
+\end{enumerate}
+
+\section{Metodología}
+\subsection{Fuente de los datos}
+El corpus se construye con dos tipos de fuente. La primera es la exportación masiva oficial del Servicio Público de Empleo (SPE), entidad del Estado colombiano, disponible en \url{https://www.buscadordeempleo.gov.co} y descargada por el mecanismo que ofrece el portal, cada 12 horas. La segunda son las búsquedas generales con ubicación Colombia en LinkedIn, Indeed y Bayt mediante la librería JobSpy, cada 30 minutos. Ambas capturas se programan con flujos automatizados en GitHub Actions.
+
+La captura es continua desde septiembre de 2026. Para este trabajo se fijó la revisión \texttt{dff10b9e08629137bd70864b64681385ab8eff72}, procesada el 24 de noviembre de 2026, con 557.279 registros: 550.928 del SPE, 3.054 de Indeed, 962 de LinkedIn, 246 de Bayt y 2.089 registros históricos de El Empleo migrados al corpus. Se respeta \texttt{robots.txt}, se usa un agente de usuario identificable y se limita la frecuencia de las solicitudes; no se recolectan datos personales de candidatos.
+
+\textbf{Disponibilidad y reproducibilidad.} El código fuente del pipeline de ingestión, procesamiento y modelado se encuentra alojado de forma abierta en GitHub (\url{https://github.com/shalom-A26/SEXTANTE}; Grupo SEXTANTE, 2026a). El conjunto de datos consolidado y versionado se publica en Hugging Face bajo el identificador \texttt{pxtron/vacantes-colombia} (\url{https://huggingface.co/datasets/pxtron/vacantes-colombia}; Patron, 2026), mientras que la plataforma web interactiva (MVP) para la exploración de perfiles, habilidades y resultados se encuentra desplegada en \url{https://sextante-web-ten.vercel.app/} (Grupo SEXTANTE, 2026b). Para garantizar la reproducibilidad exacta de los resultados reportados en este documento, todos los análisis se ejecutaron sobre la revisión fijada \texttt{dff10b9e08629137bd70864b64681385ab8eff72}, correspondiente a la ejecución (\textit{run}) \texttt{20261124T113018928192Z-dff10b9e} del 24 de noviembre de 2026. Los artefactos de esa ejecución están en \url{https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/derived/runs/20261124T113018928192Z-dff10b9e}.
+
+\subsection{Pipeline de ingeniería de datos y arquitectura por capas}
+Para garantizar trazabilidad, reproducibilidad y tolerancia a fallos en la ingesta continua, la ingeniería de datos de SEXTANTE implementa una arquitectura medallón organizada en cuatro etapas secuenciales: \textbf{Bronze}, \textbf{Silver}, \textbf{Gold} y \textbf{Consumo} (Figura~\ref{fig:arq}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  b/.style={draw, rounded corners=2pt, align=left, font=\scriptsize, text width=2.95in, inner sep=4pt},
+  brz/.style={b, fill=bronze!15, draw=bronze!80!black},
+  slv/.style={b, fill=silver!15, draw=silver!80!black},
+  gld/.style={b, fill=gold!20, draw=gold!75!black},
+  cns/.style={b, fill=ok!15, draw=ok},
+  ar/.style={-{Stealth[length=5pt]}, thick}]
+\node[brz] (a) {\textbf{1. Capa Bronze (Ingesta cruda e inmutable)}\\Orquestación vía GitHub Actions (SPE cada 12 h; JobSpy cada 30 min). Almacén de solo adición (\textit{append-only}) con respuestas crudas y sello temporal \texttt{captured\_at}.};
+\node[slv, below=0.16in of a] (b) {\textbf{2. Capa Silver (Normalización y depuración)}\\Mapeo al esquema canónico de 17 columnas, reparación de codificación UTF-8, deduplicación exacta por clave (\texttt{vacancy\_id}/\texttt{url}) y limpieza textual.};
+\node[gld, below=0.16in of b] (c) {\textbf{3. Capa Gold (Enriquecimiento y minería)}\\Detección de duplicados cruzados (MinHash), extracción de habilidades ESCO, matrices TF-IDF, tópicos NMF, perfiles K-Means y bandas salariales.};
+\node[cns, below=0.16in of c] (d) {\textbf{4. Capa de Consumo (Publicación y producto)}\\Versionado inmutable en Hugging Face (\texttt{pxtron/vacantes-colombia}), artefactos tabulares y servicio de consulta en producto web (MVP).};
+\foreach \x/\y in {a/b,b/c,c/d} \draw[ar] (\x) -- (\y);
+\end{tikzpicture}
+\caption{Pipeline de ingeniería de datos y flujo entre capas de SEXTANTE}
+\label{fig:arq}
+\vspace{1pt}
+{\footnotesize\textit{Fuente: elaboración propia a partir de la arquitectura del repositorio SEXTANTE.}}
+\end{figure}
+
+El tránsito de los datos entre cada fase ocurre mediante transformaciones deterministas y auditables:
+\begin{enumerate}
+\setlength{\itemsep}{2pt}
+\item \textbf{De las fuentes a la capa Bronze (Ingesta):} Los conectores automatizados descargan los lotes crudos en su formato original (archivos de exportación del SPE y respuestas estructuradas de JobSpy). Cada registro recibe la marca de tiempo \texttt{captured\_at} y se persiste bajo una política estricta de solo adición (\textit{append-only}), asegurando que la primera observación histórica de una vacante nunca sea sobrescrita.
+\item \textbf{De Bronze a Silver (Estandarización y calidad):} Un proceso de transformación (\textit{ETL}) convierte los esquemas heterogéneos de los cinco portales hacia un esquema canónico unificado de 17 columnas. En este paso se corrigen caracteres corruptos de codificación (95.879 celdas reparadas), se estandarizan tipos de datos, se ejecuta la deduplicación determinista por identificador único (\texttt{vacancy\_id} para SPE y \texttt{url} para JobSpy) y se normaliza el texto libre.
+\item \textbf{De Silver a Gold (Agregación analítica y modelado):} Sobre el corpus limpio se calculan las tablas derivadas de alto valor analítico. Primero se agrupan posibles duplicados entre portales mediante firmas MinHash y similitud coseno. Luego se ejecutan en paralelo los módulos de minería: coincidencia de frases contra la taxonomía ESCO v1.2.1, vectorización TF-IDF, reducción dimensional NMF, segmentación por K-Means, construcción del grafo de coocurrencia de habilidades y clasificación supervisada de bandas salariales.
+\item \textbf{De Gold a Consumo (Entrega y versionado):} Los conjuntos de datos consolidados y las métricas resultantes se empaquetan bajo un identificador único de ejecución (\textit{run ID}) y se publican en el repositorio de Hugging Face para garantizar acceso abierto y reproducibilidad científica. Simultáneamente, los artefactos finales alimentan la interfaz de consulta del producto web (MVP) desplegado en \url{https://sextante-web-ten.vercel.app/}. Para que el producto funcione con costos reducidos, esta capa genera además un paquete de servicio de unos 32 MB con el payload del dashboard precalculado sobre todo el corpus, los alias ESCO observados y las 40.000 vacantes capturadas más recientemente, en lugar de abrir el corpus completo en cada petición.
+\end{enumerate}
+
+\subsection{Descripción de los datos}
+La revisión consolidada en la capa Silver contiene 557.279 registros; tras concatenar título y descripción, la totalidad conserva texto utilizable para el análisis (626 descripciones originales estaban vacías, pero conservan el título). El 22,6\,\% de los registros no reporta salario mínimo y el 22,7\,\% no reporta salario máximo, por lo que la modelación salarial usa solo las 431.505 vacantes con banda oficial. El conteo del corpus y la fecha de corte se resumen en la Tabla~\ref{tab:corpus}; las 17 variables del esquema canónico se describen en la Tabla~\ref{tab:vars}.
+
+\begin{table}[H]
+\caption{Conteo del corpus y fecha de corte}
+\label{tab:corpus}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.55\columnwidth}c}
+\hline
+\textbf{Concepto} & \textbf{Valor}\\
+\hline
+Registros antes de la limpieza & 557.279\\
+Registros después de la limpieza & 557.279\\
+Total consolidado (SPE + portales) & 557.279\\
+Fecha de corte de la captura & 24 de noviembre de 2026\\
+Vacantes con banda salarial oficial & 431.505\\
+\hline
+\end{tabular}
+
+\vspace{2pt}
+\textit{Fuente: elaboración propia a partir de \texttt{eda.json} y \texttt{manifest.json} de la ejecución \texttt{dff10b9e}.}
+\end{table}
+
+\begin{table}[H]
+\caption{Variables del esquema canónico en la capa Silver}
+\label{tab:vars}
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.25\columnwidth}p{0.21\columnwidth}p{0.42\columnwidth}}
+\hline
+\textbf{Variable} & \textbf{Tipo} & \textbf{Descripción}\\
+\hline
+\texttt{vacancy\_id} & Texto (ID) & Identificador en la fuente\\
+\texttt{source} & Texto & Portal: spe, linkedin, indeed, bayt o elempleo\\
+\texttt{url} & Texto (ID) & Enlace a la vacante original\\
+\texttt{title} & Texto libre & Título del cargo\\
+\texttt{company} & Texto & Empresa que publica\\
+\texttt{city} & Texto & Ciudad de la vacante\\
+\texttt{department} & Texto & Departamento de la vacante\\
+\texttt{published\_at} & Fecha & Fecha de publicación\\
+\texttt{description} & Texto libre & Descripción completa\\
+\texttt{salary\_text} & Texto libre & Salario publicado como texto\\
+\texttt{salary\_min} & Numérica & Salario mínimo reportado\\
+\texttt{salary\_max} & Numérica & Salario máximo reportado\\
+\texttt{contract\_type} & Texto & Tipo de contrato\\
+\texttt{work\_modality} & Texto & Modalidad de trabajo\\
+\texttt{education\_level} & Texto & Nivel educativo requerido\\
+\texttt{experience\_text} & Texto libre & Experiencia requerida\\
+\texttt{captured\_at} & Fecha & Fecha y hora de captura\\
+\hline
+\end{tabular}
+
+\vspace{2pt}
+\textit{Fuente: elaboración propia a partir del esquema canónico del repositorio SEXTANTE (\texttt{backend/src/sextante/core/schema.py}).}
+\end{table}
+
+\subsection{Preprocesamiento}
+Dentro de la transición hacia las capas Silver y Gold se aplican cuatro pasos secuenciales. Primero, la deduplicación exacta por identificador (\texttt{vacancy\_id} en el SPE y \texttt{url} en JobSpy), porque una misma vacante puede capturarse en múltiples ciclos. Segundo, la construcción del texto de análisis, que concatena título y descripción, ya que ambos contienen señales del cargo. Tercero, la normalización lingüística: conversión a minúsculas y eliminación de tildes y de palabras vacías del español, para que variantes ortográficas no se cuenten como términos distintos. Cuarto, el descarte de registros sin texto utilizable. Adicionalmente, en la capa Gold se buscan candidatos a duplicados entre distintos portales con MinHash y similitud coseno (umbral de 0,90): se generaron 415.641 pares candidatos en 43.014 grupos que cubren 215.881 vacantes; esos pares se marcan para revisión manual y no se eliminan de forma automática.
+
+\subsection{Técnica}
+Dado que las vacantes no traen una etiqueta de ocupación, se usan métodos no supervisados en la capa Gold. Las habilidades se extraen por coincidencia exacta de frases con la clasificación ESCO v1.2.1 en español (Comisión Europea, 2025), una técnica transparente y de bajo costo, aunque no resuelve el contexto. El texto se representa con TF-IDF usando unigramas y bigramas (\texttt{ngram\_range=(1,2)}, \texttt{min\_df=2}, \texttt{max\_df=0.98}, 50.000 términos); los temas se obtienen con NMF (12 temas) y los perfiles ocupacionales con K-Means ($k=16$, \texttt{n\_init=10}, 300 iteraciones, semilla 42), apoyado en scikit-learn. El grafo de habilidades enlaza dos habilidades cuando aparecen juntas en una vacante y pondera cada arista con el número de vacantes compartidas. El grado ordinario cuenta las habilidades vecinas; el grado ponderado suma los pesos de esas aristas y se guarda como \texttt{weighted\_degree} en \texttt{skill\_graph\_nodes.parquet}. Esta medida señala habilidades que conectan muchas otras con frecuencia, no solo las más mencionadas.
+
+La Figura~\ref{fig:etapas} resume el estado de implementación de las etapas técnicas del proyecto sobre el corpus fijado. Como línea futura se evaluarán modelos de temas basados en \textit{embeddings}, como BERTopic (Grootendorst, 2022).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\scriptsize]
+\def\h{0.52}
+\foreach \i/\lab/\st/\col/\tc in {
+ 0/{1. Captura de datos}/{Ejecutada}/ok/white,
+ 1/{2. Minería de texto}/{Ejecutada}/ok/white,
+ 2/{3. Representaciones}/{Ejecutadas}/ok/white,
+ 3/{4. Segmentación}/{Ejecutada}/ok/white,
+ 4/{5. Modelos supervisados}/{Ejecutados}/ok/white,
+ 5/{6. Grafo de habilidades}/{Ejecutado}/ok/white,
+ 6/{7. Spark (si se requiere)}/{Según el volumen}/plan/black,
+ 7/{8. Producto web (MVP)}/{Implementado}/ok/white}
+{
+  \node[anchor=west] at (0,-\i*\h) {\lab};
+  \fill[\col] (3.9,-\i*\h-0.19) rectangle (8.2,-\i*\h+0.19);
+  \node[text=\tc] at (6.05,-\i*\h) {\st};
+}
+\end{tikzpicture}
+\caption{Estado de las etapas del proyecto SEXTANTE}
+\label{fig:etapas}
+\vspace{1pt}
+{\footnotesize\textit{Fuente: elaboración propia a partir del repositorio SEXTANTE y de la ejecución fijada.}}
+\end{figure}
+
+\subsection{Evaluación}
+Al tratarse de métodos no supervisados, no se divide el conjunto en entrenamiento y prueba para la segmentación. La métrica principal es el coeficiente de silueta con distancia coseno: para cada vacante se calcula $s=(b-a)/\max(a,b)$, donde $a$ es la distancia media a las vacantes de su propio grupo y $b$ la distancia media al grupo vecino más cercano; el valor reportado es el promedio de una muestra de 5.000 vacantes seleccionadas a intervalos regulares. El número de perfiles se fijó en $k=16$ mediante un barrido de $k=8$ a $k=24$ (siluetas de 0,1463 a 0,2159), priorizando la legibilidad de los grupos. Ward y DBSCAN se comparan sobre 3.000 vacantes proyectadas en 50 componentes SVD. Para la banda salarial sí se usa validación cruzada estratificada de cinco pliegues sobre 100.000 filas, con 431.505 vacantes etiquetadas con las seis bandas oficiales del SPE.
+
+\textbf{Validación manual.} No se realizó revisión manual de una muestra de vacantes; en consecuencia, no hay un número de vacantes revisadas ni acuerdos de anotación que reportar. La validación efectivamente ejecutada es la descrita arriba: silueta coseno sobre 5.000 vacantes y validación cruzada de cinco pliegues sobre 100.000 filas. Como trabajo futuro se propone revisar manualmente 200 menciones de habilidades ESCO y 200 asignaciones de segmento, con doble anotación y cálculo de acuerdo, antes de usar los resultados en recomendaciones automatizadas. La Figura~\ref{fig:commits} muestra el avance del repositorio: 87 confirmaciones de cambio (\textit{commits}) entre el 15 de septiembre y el 24 de noviembre de 2026.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, width=\columnwidth, height=4.6cm, bar width=22pt,
+  symbolic x coords={sep,oct,nov},
+  xtick=data, xlabel={Mes (2026)},
+  ymin=0, ymax=50, ylabel={Commits},
+  label style={font=\scriptsize}, tick label style={font=\scriptsize},
+  nodes near coords, nodes near coords style={font=\scriptsize},
+  enlarge x limits=0.4]
+\addplot[fill=ok, draw=ok!70!black] coordinates {(sep,18) (oct,26) (nov,43)};
+\end{axis}
+\end{tikzpicture}
+\caption{Commits por mes en el repositorio SEXTANTE (total: 87)}
+\label{fig:commits}
+\vspace{1pt}
+{\footnotesize\textit{Fuente: historial del repositorio, con corte al 24 de noviembre de 2026.}}
+\end{figure}
+
+\subsection{Producto web y servicio de consulta}
+El producto se expone en \url{https://sextante-web-ten.vercel.app/} (Grupo SEXTANTE, 2026b) y se organiza en tres rutas. La portada (`/`) presenta el corpus y una guía interactiva de «cómo funciona»; \texttt{/dashboard} muestra los agregados del run fijado; \texttt{/cv} recibe el archivo del aspirante y devuelve las coincidencias. El frontend está construido con Next.js 16, React 19, Tailwind v4 y shadcn/ui, con animaciones GSAP y una escena three.js. Una sola petición memoizada (\texttt{getDashboard()}) alimenta de forma simultánea la portada, el inventario de cifras, la guía y el dashboard, de modo que todas las pantallas consultan el mismo run. La escena 3D se detiene fuera de pantalla y, cuando el sistema opera con movimiento reducido o sin WebGL2, se sustituye por una ilustración SVG estática y completa. La guía procesa en el navegador seis vacantes ficticias, explícitamente etiquetadas como tales, para ilustrar cada técnica; no forman parte del corpus real.
+
+La interfaz consume una API FastAPI desplegada en Render mediante tres endpoints: \texttt{GET /api/health} (run y número de vacantes), \texttt{GET /api/dashboard} (agregados) y \texttt{POST /api/cv/match} (emparejamiento). La API no abre el corpus completo en memoria: descarga el paquete de servicio descrito en la capa de Consumo, con el que el consumo máximo de memoria es de unos 390 MB y el emparejamiento tarda unos 30 ms, frente a los 2,5 GB que exige el run analítico completo. La arquitectura de despliegue coordina tres servicios: Hugging Face como memoria del corpus, Render como API con un token \texttt{HF\_TOKEN} de solo lectura y Vercel como web con \texttt{NEXT\_PUBLIC\_API\_URL} definida en tiempo de compilación. El plan gratuito de Render suspende el servicio tras 15 minutos de inactividad, por lo que la primera petición puede tardar alrededor de un minuto.
+
+\section{Resultados}
+La extracción con ESCO produjo 1.131.942 menciones de habilidades en las 557.279 vacantes. El agrupamiento K-Means generó 16 perfiles; la Figura~\ref{fig:segmentos} muestra los ocho predominantes. El perfil de servicio al cliente (\textit{cluster} 8) reúne 100.975 vacantes (18,1\,\% del corpus), seguido por gestión y analista (88.565; 15,9\,\%) y comercial (62.869; 11,3\,\%). El grafo de coocurrencia sitúa «comunicación» como la habilidad más conectada por grado ponderado (174.955; 71.387 vacantes), seguida por «servicio al cliente» (172.934). La distribución confirma que la demanda agregada se concentra en atención al cliente, ventas y actividades administrativas, no en los títulos más visibles de los portales.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[xbar, width=0.96\columnwidth, scale only axis=false, height=6.0cm, bar width=7pt,
+  ytick={1,2,3,4,5,6,7,8},
+  yticklabels={Call center,Bodega,Construcción,Producción,Ventas,Comercial,Gestión/Analista,Servicio al cliente},
+  xlabel={Vacantes},
+  xmin=0, xmax=138000,
+  scaled x ticks=false,
+  xtick={0,30000,60000,90000,120000},
+  xticklabels={0,30\,k,60\,k,90\,k,120\,k},
+  xticklabel style={font=\scriptsize},
+  yticklabel style={font=\scriptsize},
+  nodes near coords,
+  nodes near coords style={
+    font=\scriptsize,
+    /pgf/number format/fixed,
+    /pgf/number format/use comma,
+    /pgf/number format/1000 sep={.}
+  },
+  enlarge y limits=0.08]
+\addplot[fill=ok!75, draw=ok!70!black] coordinates {
+ (100975,8) (88565,7) (62869,6) (43059,5)
+ (34609,4) (31114,3) (28881,2) (28576,1)};
+\end{axis}
+\end{tikzpicture}
+\caption{Servicio al cliente y gestión concentran el 34,0\,\% de las vacantes}
+\label{fig:segmentos}
+\vspace{1pt}
+{\footnotesize\textit{Fuente: elaboración propia a partir de \texttt{segment\_profiles.csv} de la revisión \texttt{dff10b9e}.}}
+\end{figure}
+
+\textbf{Interpretación.} Dos perfiles reúnen algo más de un tercio del corpus y el resto se reparte entre grupos más pequeños: la demanda agregada se concentra, pero no se reduce a un solo tipo de cargo.
+
+La separación entre perfiles es débil: la silueta coseno del K-Means publicado es 0,2010 en la comparación de métodos y 0,0150 en la muestra de 5.000 vacantes del corpus completo (Figura~\ref{fig:silueta}). Ward alcanza 0,1464 y DBSCAN $-0,1448$ con 27,0\,\% de ruido. El barrido de $k$ eleva la silueta de 0,1463 ($k=8$) a 0,2159 ($k=24$); se conserva $k=16$ por equilibrio entre separación y legibilidad de los perfiles. En términos prácticos, los grupos ordenan el mercado pero no constituyen categorías nítidas.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, width=\columnwidth, height=4.8cm, bar width=20pt,
+  symbolic x coords={K-Means,Ward,DBSCAN},
+  xtick=data, xticklabel style={font=\scriptsize},
+  ymin=-0.16, ymax=0.26, ylabel={Silueta coseno},
+  label style={font=\scriptsize}, tick label style={font=\scriptsize},
+  nodes near coords,
+  nodes near coords style={
+    font=\scriptsize,
+    /pgf/number format/fixed,
+    /pgf/number format/precision=4,
+    /pgf/number format/use comma
+  },
+  enlarge x limits=0.35]
+\addplot[fill=part!70, draw=part!80!black] coordinates {(K-Means,0,2010) (Ward,0,1464) (DBSCAN,-0,1448)};
+\end{axis}
+\end{tikzpicture}
+\caption{K-Means supera a Ward y DBSCAN, pero su silueta es baja (0,2010)}
+\label{fig:silueta}
+\vspace{1pt}
+{\footnotesize\textit{Fuente: elaboración propia a partir de \texttt{clustering\_comparison.json} de la revisión \texttt{dff10b9e}.}}
+\end{figure}
+
+\textbf{Interpretación.} K-Means es la mejor de las tres alternativas, pero el valor absoluto de la silueta es bajo y DBSCAN además deja 27,0\,\% de ruido: los perfiles sirven para explorar, no para clasificar vacantes individuales.
+
+La clasificación de bandas salariales supera de forma consistente a la línea base (Tabla~\ref{tab:modelo}). La exactitud es 0,748 frente a 0,604 de la clase mayoritaria, una ganancia de 14,4 puntos porcentuales; la métrica macro-F1 pasa de 0,126 a 0,562, lo que indica que el modelo no solo acierta la banda modal. El 94,5\,\% de las predicciones queda a lo sumo en una banda de la observada, frente al 85,6\,\% de la línea base.
+
+\begin{table}[H]
+\caption{Evaluación del clasificador de banda salarial}
+\label{tab:modelo}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.42\columnwidth}cc}
+\hline
+\textbf{Métrica} & \textbf{Modelo} & \textbf{Línea base}\\
+\hline
+Exactitud & 0,748 & 0,604\\
+Macro-F1 & 0,562 & 0,126\\
+Aciertos en una banda o menos & 0,945 & 0,856\\
+\hline
+\end{tabular}
+
+\vspace{2pt}
+\textit{Fuente: elaboración propia a partir de \texttt{supervised\_metrics.json} de la revisión \texttt{dff10b9e}.}
+\end{table}
+
+\subsection{Funcionalidades disponibles para el usuario}
+El dashboard traduce los resultados en consultas concretas. La Tabla~\ref{tab:web} relaciona cada funcionalidad con el dato que la respalda; todas las cifras se calculan sobre el corpus completo del run fijado, no sobre una muestra de pantalla.
+
+\begin{table}[H]
+\caption{Funcionalidades del producto web y respaldo en datos}
+\label{tab:web}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.34\columnwidth}p{0.54\columnwidth}}
+\hline
+\textbf{Funcionalidad} & \textbf{Dato que la respalda}\\
+\hline
+Panel general & KPIs del corpus, métricas del modelo y comparación de agrupamientos\\
+Perfiles & Tamaño, banda salarial modal, habilidades, modalidad y ciudades por perfil\\
+Vacantes por perfil & Muestra de vacantes con enlace a la fuente original\\
+Habilidades & Más demandadas, por nivel educativo y grafo de coocurrencia\\
+Territorio & Salario por departamento y proyección 2D del corpus\\
+Análisis de CV & 20 coincidencias, 3 nichos, 3 pivotes, brechas y banda estimada\\
+\hline
+\end{tabular}
+
+\vspace{2pt}
+\textit{Fuente: elaboración propia a partir de los endpoints de la API y de los artefactos del run \texttt{dff10b9e}.}
+\end{table}
+
+La función «Analizar CV» acepta PDF, DOCX o TXT de hasta 5 MB. El archivo se procesa en memoria y se descarta con la respuesta: no se almacena ni se registra. Se extraen las habilidades con el mismo matcher ESCO y se representan los textos con el mismo vectorizador TF-IDF que alimentó la segmentación. Para cada vacante, la puntuación combina la similitud coseno normalizada por la mejor coincidencia y la proporción de habilidades compartidas:
+
+\begin{equation}
+\mathrm{match}=\frac{1}{2}\frac{\cos(\mathrm{CV},v)}{\max_v\cos(\mathrm{CV},\cdot)}+\frac{1}{2}\frac{|S_{\mathrm{CV}}\cap S_v|}{|S_v|}.
+\end{equation}
+
+Se usa solo similitud de texto cuando la vacante no menciona habilidades. La respuesta devuelve 20 coincidencias, los 3 perfiles más afines (nichos), hasta 3 perfiles vecinos (pivotes) con su ruta de transición, y las habilidades exigidas por al menos el 15\,\% de un perfil que el CV no menciona (brechas). El porcentaje de coincidencia es una heurística de ordenamiento, no una probabilidad calibrada; la estimación salarial es siempre una banda con su probabilidad de modelo, nunca un monto exacto. Cada coincidencia incluye la dirección original de la vacante para aplicar directamente en la fuente.
+
+\section{Discusión}
+La pregunta de análisis se responde así: el mercado laboral colombiano demanda sobre todo habilidades de servicio al cliente, ventas y gestión administrativa, y esas demandas se agrupan en 16 perfiles ordenables pero estadísticamente débiles. Este patrón coincide con la literatura en que la extracción de habilidades a partir de texto no estructurado es una tarea consolidada con soluciones que van desde diccionarios hasta aprendizaje profundo (Khaouja et al., 2021; Senger et al., 2024); el aporte aquí es la aplicación de una taxonomía abierta, ESCO, a vacantes en español y a escala nacional. Frente a enfoques supervisados como SkillSpan (Zhang et al., 2022), la coincidencia exacta es auditable y barata, pero pierde menciones con sinónimos locales y no resuelve el contexto, una limitación ya señalada para este tipo de extracción. La baja silueta observada refuerza la recomendación de tratar los perfiles como señales exploratorias: la segmentación es útil para describir y navegar el corpus, no para etiquetar vacantes individuales sin revisión. Como trabajo futuro se propone contrastar estos resultados con modelos temáticos basados en \textit{embeddings}, como BERTopic (Grootendorst, 2022), y someter a revisión humana una muestra de menciones y grupos.
+
+En el producto esta lectura se traduce en una decisión de diseño: el dashboard expone los perfiles como navegación y muestra siempre la banda salarial estimada junto a su carácter de estimación, sin asignar etiquetas ocupacionales a vacantes individuales; la guía interactiva declara que sus filas son ficticias. De este modo, la web comunica la misma cautela que imponen las métricas: describir la demanda agregada no equivale a validar cada clasificación. El emparejamiento de CV sigue la misma lógica: su porcentaje ordena vacantes, no mide la probabilidad de que una persona sea contratada.
+
+\section{Conclusión}
+\textbf{Respuesta.} Las vacantes colombianas demandan principalmente habilidades de servicio, ventas y gestión, agrupables en 16 perfiles de baja separabilidad estadística.
+
+\textbf{Recomendaciones.} Primero, dado que la silueta coseno es 0,0150 y los perfiles no son nítidos, usarlos como señal exploratoria para orientar programas de formación y búsqueda de empleo, sin presentarlos como clasificaciones validadas. Segundo, dado que el clasificador de bandas supera a la línea base en 14,4 puntos de exactitud y alcanza 0,945 de aciertos a una banda de distancia, incorporar esa estimación como apoyo a la orientación salarial, mostrando siempre la banda observada y su carácter de estimación.
+
+\textbf{Limitación.} La silueta coseno es baja (0,0150 en la muestra completa) y la validación manual de habilidades, temas y grupos sigue pendiente: no se revisó ninguna muestra de vacantes, por lo que no hay conteos de vacantes revisadas ni acuerdos de anotación que reportar. Las cifras describen el corpus fijado y no todo el empleo del país.
+
+\section*{Referencias}
+\footnotesize\raggedright
+\apa{Comisión Europea. (2025). \textit{ESCO v1.2.1: European Skills, Competences, Qualifications and Occupations} [Clasificación]. \url{https://esco.ec.europa.eu}}
+\apa{Grootendorst, M. (2022). \textit{BERTopic: Neural topic modeling with a class-based TF-IDF procedure}. arXiv. \url{https://doi.org/10.48550/arXiv.2203.05794}}
+\apa{Grupo SEXTANTE. (2026a). \textit{SEXTANTE: Sistema de extracción y análisis de habilidades y perfiles ocupacionales en vacantes colombianas} [Software]. GitHub. \url{https://github.com/shalom-A26/SEXTANTE}}
+\apa{Grupo SEXTANTE. (2026b). \textit{SEXTANTE Web: Plataforma interactiva de exploración del mercado laboral colombiano} [Aplicación web]. Vercel. \url{https://sextante-web-ten.vercel.app/}}
+\apa{Khaouja, I., Kassou, I., y Ghogho, M. (2021). A survey on skill identification from online job ads. \textit{IEEE Access}, \textit{9}, 118134-118153. \url{https://doi.org/10.1109/ACCESS.2021.3106120}}
+\apa{Patron, A. (2026). \textit{vacantes-colombia} (Revisión \texttt{dff10b9e}) [Conjunto de datos]. Hugging Face. \url{https://huggingface.co/datasets/pxtron/vacantes-colombia}}
+\apa{Senger, E., Zhang, M., van der Goot, R., y Plank, B. (2024). Deep learning-based computational job market analysis: A survey on skill extraction and classification from job postings. En E. Hruschka, T. Lake, N. Otani y T. Mitchell (Eds.), \textit{Proceedings of the First Workshop on Natural Language Processing for Human Resources (NLP4HR 2024)} (pp. 1-15). Association for Computational Linguistics. \url{https://doi.org/10.18653/v1/2024.nlp4hr-1.1}}
+\apa{Servicio Público de Empleo. (s.~f.). \textit{Buscador de empleo}. \url{https://www.buscadordeempleo.gov.co}}
+\apa{Zhang, M., Jensen, K. N., Sonniks, S. D., y Plank, B. (2022). SkillSpan: Hard and soft skill extraction from English job postings. En \textit{Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies} (pp. 4962-4984). Association for Computational Linguistics. \url{https://doi.org/10.18653/v1/2022.naacl-main.366}}
+
+\end{document}

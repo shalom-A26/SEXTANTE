@@ -1,0 +1,52 @@
+SEXTANTE — datos usados en el paper final (Fase 3)
+
+Repositorio: https://huggingface.co/datasets/pxtron/vacantes-colombia
+Carpeta del run analizado:
+https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/main/derived/runs/20261124T113018928192Z-dff10b9e
+Carpeta en la revision fijada:
+https://huggingface.co/datasets/pxtron/vacantes-colombia/tree/dff10b9e08629137bd70864b64681385ab8eff72/derived/runs/20261124T113018928192Z-dff10b9e
+Puntero que lee la API:
+https://huggingface.co/datasets/pxtron/vacantes-colombia/blob/main/derived/latest.json
+
+Run fijado: 20261124T113018928192Z-dff10b9e
+Revision de las fuentes: dff10b9e08629137bd70864b64681385ab8eff72
+Procesado: 2026-11-24 12:07 UTC
+Tamaño del corpus: 557.279 vacantes
+
+Artefactos utilizados (ruta dentro del repositorio de Hugging Face):
+  derived/runs/20261124T113018928192Z-dff10b9e/manifest.json
+  derived/runs/20261124T113018928192Z-dff10b9e/eda.json
+  derived/runs/20261124T113018928192Z-dff10b9e/segment_profiles.csv
+  derived/runs/20261124T113018928192Z-dff10b9e/clustering_comparison.json
+  derived/runs/20261124T113018928192Z-dff10b9e/supervised_metrics.json
+  derived/runs/20261124T113018928192Z-dff10b9e/graph_metrics.json
+  derived/runs/20261124T113018928192Z-dff10b9e/topics.csv
+  derived/runs/20261124T113018928192Z-dff10b9e/skill_graph_nodes.parquet
+
+manifest.json es el indice: contiene source.rows, source.revision, todos los
+resultados y el sha256 de cada artefacto. Las cifras del notebook están copiadas
+de estos archivos; el notebook no recalcula el run. Su tabla de procedencia y
+las advertencias sobre esa decisión están en la primera celda. Los sha256 de
+los artefactos descargados se contrastaron contra manifest.json.
+
+Hallazgo del grafo añadido en esta entrega: grado ponderado (weighted_degree),
+la suma de pesos de coocurrencia de cada habilidad. En este run, comunicacion
+tiene el valor mayor: 174.955, con 71.387 vacantes. El peso de una arista es el
+numero de vacantes en que aparecen juntas dos habilidades ESCO.
+
+Cifras que deben repetir el paper, el notebook y las diapositivas:
+  557.279 vacantes; 1.131.942 menciones ESCO; 16 perfiles;
+  silueta coseno 0,0150 (n=5.000); K-Means 0,2010 / Ward 0,1464 /
+  DBSCAN -0,1448 (ruido 27,0 %); exactitud 0,748 frente a 0,604;
+  macro-F1 0,562 frente a 0,126; 0,945 a una banda de distancia;
+  servicio al cliente + gestion = 189.540 vacantes (34,0 %).
+
+La validación manual NO se realizó: no hay conteo de vacantes revisadas ni
+acuerdos de anotación que reportar. La silueta y la validación cruzada son la
+única validación ejecutada.
+
+Documentacion del repositorio: docs/data.md (lineas 82-83 y 164-165),
+docs/architecture.md (layout derived/runs/<run_id>/ y derived/latest.json) y
+docs/techniques.md §10 (grafo y grado ponderado).
+
+El dataset es privado. El acceso se solicita al propietario del repositorio en Hugging Face.

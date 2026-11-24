@@ -1,0 +1,34 @@
+Entrega Fase 3 — GRUPO_D / carpeta FASE_3
+
+Contenido de esta carpeta:
+  - GRUPO_D_FASE_3_Paper.tex       (fuente LaTeX; se compila en Overleaf)
+  - GRUPO_D_FASE_3_Analisis.ipynb  (notebook con procedencia y aserciones)
+  - GRUPO_D_FASE_3_Datos.txt       (run, revision, enlaces HF y cifras)
+  - GRUPO_D_FASE_3_Cambios.pdf     (atencion a las 6 observaciones de Fase 2)
+  - INSTRUCCIONES.txt              (este archivo)
+
+NO hay presentacion en esta carpeta: la entregan los otros integrantes.
+
+1) Paper: abre Overleaf, reemplaza main.tex por GRUPO_D_FASE_3_Paper.tex y
+   compila. Exporta GRUPO_D_FASE_3_Paper.pdf. Aquí no hay pdflatex, por eso se
+   entrega el .tex. Exporta tambien el notebook a PDF o IPYNB segun pida SAVIO.
+
+2) Las diapositivas deben actualizarse con ESTAS cifras del run
+   20261124T113018928192Z-dff10b9e (24 de noviembre de 2026):
+   - Corpus: 557.279 vacantes (550.928 SPE, 3.054 Indeed, 962 LinkedIn,
+     246 Bayt y 2.089 historicas de El Empleo).
+   - ESCO: 1.131.942 menciones de habilidades.
+   - Perfiles: 16; silueta coseno 0,0150 sobre 5.000 vacantes.
+   - Comparacion: K-Means 0,2010; Ward 0,1464; DBSCAN -0,1448 (27,0 % ruido).
+   - Banda salarial: exactitud 0,748 vs 0,604 de linea base; macro-F1 0,562
+     vs 0,126; 94,5 % a una banda o menos.
+   - Servicio al cliente + gestion: 189.540 vacantes = 34,0 %.
+   - Grafo: comunicacion es la habilidad con mayor grado ponderado (174.955).
+   - NO hubo revision manual: no reportar vacantes revisadas ni acuerdos.
+
+3) Zip final: FASE_3.zip con los archivos de esta carpeta mas el PDF del paper
+   exportado en Overleaf. No incluir presentacion.
+
+El workflow de analítica ya corrio con upload=true (run 45384643120, 38m24s):
+publico el run nuevo en Hugging Face, actualizo derived/latest.json y
+redesplego la API en Render. La web y estos entregables apuntan al mismo run.
