@@ -679,6 +679,7 @@ pools keep ~150 MB of freed buffers.
 
 One dated line per change, in system terms. Newest first.
 
+- **2026-11-24** — The skills-graph contract now defines weighted degree (sum of co-occurrence edge weights) alongside PageRank and betweenness, and points to `weighted_degree` in `skill_graph_nodes.parquet`.
 - **2026-11-19** — Docs consolidated into `architecture.md`, `data.md` and `techniques.md`; `AGENTS.md` gains the docs-sync table and `CLAUDE.md` the stack notes. The dataset card now points to `docs/data.md` for source viability.
 - **2026-11-19** — Repository split into `backend/` (one `sextante` package: `core`, `ingestion`, `analytics`, `api`) and `frontend/`. CLIs become `python -m sextante.ingestion` / `python -m sextante.analytics`; the API image builds from `backend/Dockerfile`; Vercel's root directory is `frontend`.
 - **2026-11-19** — Web app redesigned: 3D landing, liquid-glass UI and an interactive guide that runs the pipeline techniques in the browser on example rows.

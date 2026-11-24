@@ -194,10 +194,13 @@ between occupations.
 **How.** Two skills are linked when the same posting asks for both; the edge
 weight is the number of such postings. Louvain finds communities by
 maximizing modularity `Q`; PageRank and sampled betweenness rank central and
-bridging skills. Each segment gets a skill profile (share and lift of each
-skill inside it); segments link to their most similar segments by profile
-cosine, and Dijkstra over `1 − similarity` gives the transition routes the CV
-flow shows as pivots.
+bridging skills. Plain degree counts distinct neighbours, while weighted
+degree sums the weights of the incident edges — how often a skill is asked
+together with others — and is stored as `weighted_degree` in
+`skill_graph_nodes.parquet`. Each segment gets a skill profile (share and lift
+of each skill inside it); segments link to their most similar segments by
+profile cosine, and Dijkstra over `1 − similarity` gives the transition routes
+the CV flow shows as pivots.
 
 **Parameters.** Top 400 skills as nodes, edges with ≥ 2 shared postings,
 3 neighbour segments, Louvain `seed=42`.
